@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { Command } from "commander";
 import { fmsToCommonProject } from "./mapper/common.js";
 import { writeNsfProjectFiles } from "./nsfConvert.js";
+import { optimizeCommonProject } from "./optimizer/common.js";
 import { inspectProject, readFmsFile } from "./parser/fms/index.js";
 import { formatNsfTrackList, readNsfFile } from "./parser/nsf/index.js";
 import { startUiServer } from "./uiServer.js";
@@ -29,7 +30,7 @@ program
   .description("Convert FamiStudio songs to Furnace/DefleMask projects")
   .action(async (file: string, options: { out?: string }) => {
     const fms = await readFmsFile(file);
-    const common = fmsToCommonProject(fms, 0);
+    const common = optimizeCommonProject(fmsToCommonProject(fms, 0));
     const parsed = parse(file);
     const output = options.out ?? join(dirname(file), `${parsed.name}.fur`);
     await writeFile(output, writeFur068FromCommon(common));

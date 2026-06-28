@@ -4,6 +4,7 @@ import { basename, join, parse } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { fmsToCommonProject } from "./mapper/common.js";
+import { optimizeCommonProject } from "./optimizer/common.js";
 import { readFmsFile } from "./parser/fms/index.js";
 import { readFuwFile } from "./parser/fur/wavetable.js";
 import { readNsfBuffer, readNsfFile, type NsfDocument, type NsfTrack } from "./parser/nsf/index.js";
@@ -94,7 +95,7 @@ export async function writeNsfProjectFiles(
     const furPath = join(outputDir, `${trackName}.fur`);
     await importNsfTrackWithFamiStudio(inputPath, textPath, track, options);
     const project = await readFmsFile(textPath);
-    const common = fmsToCommonProject(project, 0);
+    const common = optimizeCommonProject(fmsToCommonProject(project, 0));
     common.name = document.header.title || common.name;
     common.author = document.header.artist || common.author;
     common.song.name = track.name;
@@ -120,7 +121,7 @@ async function convertNsfDocumentToFurFiles(
       const textPath = join(tempDir, `${String(track.index).padStart(2, "0")}.txt`);
       await importNsfTrackWithFamiStudio(inputPath, textPath, track, options);
       const project = await readFmsFile(textPath);
-      const common = fmsToCommonProject(project, 0);
+      const common = optimizeCommonProject(fmsToCommonProject(project, 0));
       common.name = document.header.title || common.name;
       common.author = document.header.artist || common.author;
       common.song.name = track.name;

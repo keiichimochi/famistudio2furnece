@@ -60,10 +60,19 @@ DPCM Count : ...
 ```txt
 FamiStudio (.fms)
 NSF (.nsf) -> FamiStudio CLI -> FamiStudio text
+  -> FMS parser model
   -> common JSON IR
+  -> optimizer
   -> Furnace (.fur)
   -> DefleMask (.dmf)
 ```
+
+Responsibilities:
+
+- Parser: reads FamiStudio binary/text data only.
+- Mapper: translates NES/FamiStudio channels, notes, instruments, and effects into the common Game Boy-oriented IR.
+- Optimizer: applies playback-safe conversion passes that are reusable across writers, including active volume carry, Noise retrigger rows, and cross-pattern note-offs.
+- Writer: writes a target file format from the optimized common IR.
 
 ## Mapping Plan
 
@@ -83,8 +92,8 @@ NSF (.nsf) -> FamiStudio CLI -> FamiStudio text
 | Phase 2 Common JSON | Implemented for current converter path |
 | Phase 3 NES to Game Boy mapping | Implemented for pulse/triangle/noise/DPCM mute |
 | Phase 4 Envelope conversion | Not started |
-| Phase 5 Pattern conversion | Not started |
-| Phase 6 Effect conversion | Not started |
+| Phase 5 Pattern conversion | In progress: order tables, rows, note-offs, empty order slots |
+| Phase 6 Effect conversion | In progress: volume, FinePitch, vibrato, volume slide, duty |
 | Phase 7 Instrument conversion | Not started |
 | Phase 8 Furnace writer | In progress: Furnace 0.6.8.3 `.fur` writer, FUW wavetable embedding |
 | Phase 9 DefleMask writer | Not started |
@@ -104,9 +113,17 @@ Phase 1 preserves these FamiStudio structures:
 
 NSF conversion currently relies on FamiStudio's NSF importer. The UI lists NSF songs, imports each song through FamiStudio, embeds the configured `.fuw` wavetable for GB Wave usage, and saves one `.fur` per NSF song.
 
-## Unsupported Effects
+## Effect Conversion
 
-All effects are currently parsed as source metadata only. Effect conversion starts in Phase 6, where unsupported effects will emit warnings.
+| FamiStudio effect | Furnace effect |
+| --- | --- |
+| Volume | Volume column |
+| FinePitch | `E5xx` pitch offset approximation |
+| Vibrato | `04xy` |
+| VolumeSlide | `0Axy` |
+| DutyCycle | `12xx` |
+
+Unsupported effects emit warnings when they are encountered. NES-specific `phaseReset` and `deltaCounter` are currently left unsupported for Game Boy output.
 
 ## Fixtures
 

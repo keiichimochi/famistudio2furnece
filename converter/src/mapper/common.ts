@@ -178,7 +178,6 @@ function mapChannel(
     order,
     patterns
   };
-  addCrossPatternNoteOffs(commonChannel, patternLength);
   return commonChannel;
 }
 
@@ -191,24 +190,10 @@ function mapPattern(
   target: CommonChannel["target"]
 ): CommonPattern {
   const rows: CommonNote[] = [];
-  let lastNoiseNote: Pick<CommonNote, "note" | "instrument"> | undefined;
-  let currentVolume: number | undefined;
 
   for (const fmsNote of pattern.notes) {
     const row = mapNote(fmsNote, instrumentById, warnings, rowScale);
     if (!row) continue;
-    if (row.note !== undefined && row.note < 180 && row.volume === undefined && currentVolume !== undefined) {
-      row.volume = currentVolume;
-    }
-    if (row.volume !== undefined) currentVolume = row.volume;
-    if (target === "GB Noise" && row.note !== undefined && row.note < 180) {
-      lastNoiseNote = { note: row.note, instrument: row.instrument };
-    } else if (target === "GB Noise" && row.note !== undefined) {
-      lastNoiseNote = undefined;
-    } else if (target === "GB Noise" && row.volume !== undefined && lastNoiseNote) {
-      row.note = lastNoiseNote.note;
-      row.instrument = lastNoiseNote.instrument;
-    }
     rows.push(row);
   }
 
@@ -217,64 +202,6 @@ function mapPattern(
     name: pattern.name || `Pattern ${index}`,
     rows: mergeRows(rows)
   };
-}
-
-function addCrossPatternNoteOffs(channel: CommonChannel, patternLength: number): void {
-  for (let orderIndex = 0; orderIndex < channel.order.length; orderIndex++) {
-    const pattern = channel.patterns[channel.order[orderIndex] ?? 0];
-    if (!pattern) continue;
-
-    for (const row of pattern.rows) {
-      if (row.note === undefined || row.note >= 180 || row.duration === undefined) continue;
-      const absoluteEnd = orderIndex * patternLength + row.row + row.duration;
-      const targetOrderIndex = Math.floor(absoluteEnd / patternLength);
-      if (targetOrderIndex <= orderIndex || targetOrderIndex >= channel.order.length) continue;
-
-      if (channel.target === "GB Noise") {
-        addCrossPatternNoiseContinuation(channel, orderIndex + 1, targetOrderIndex, absoluteEnd, patternLength, row);
-      }
-
-      const targetRow = absoluteEnd % patternLength;
-      const targetPattern = channel.patterns[channel.order[targetOrderIndex] ?? 0];
-      if (!targetPattern) continue;
-      if (targetPattern.rows.some((target) => target.row === targetRow && target.note !== undefined && target.note < 180)) continue;
-
-      const existingIndex = targetPattern.rows.findIndex((target) => target.row === targetRow);
-      const noteOff: CommonNote = { row: targetRow, note: 180, source: row.source };
-      if (existingIndex >= 0) {
-        targetPattern.rows[existingIndex] = mergeRow(targetPattern.rows[existingIndex], noteOff);
-      } else {
-        targetPattern.rows.push(noteOff);
-        targetPattern.rows.sort((a, b) => a.row - b.row);
-      }
-    }
-  }
-}
-
-function addCrossPatternNoiseContinuation(
-  channel: CommonChannel,
-  startOrderIndex: number,
-  endOrderIndex: number,
-  absoluteEnd: number,
-  patternLength: number,
-  sourceRow: CommonNote
-): void {
-  for (let orderIndex = startOrderIndex; orderIndex <= endOrderIndex; orderIndex++) {
-    const pattern = channel.patterns[channel.order[orderIndex] ?? 0];
-    if (!pattern) continue;
-    const endRow = orderIndex === endOrderIndex ? absoluteEnd % patternLength : patternLength;
-
-    for (let rowIndex = 0; rowIndex < pattern.rows.length; rowIndex++) {
-      const row = pattern.rows[rowIndex];
-      if (row.row >= endRow || row.note !== undefined || row.volume === undefined) continue;
-      pattern.rows[rowIndex] = mergeRow(row, {
-        row: row.row,
-        note: sourceRow.note,
-        instrument: sourceRow.instrument,
-        source: sourceRow.source
-      });
-    }
-  }
 }
 
 function mapNote(

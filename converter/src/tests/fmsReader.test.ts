@@ -2,12 +2,17 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { fmsToCommonProject } from "../mapper/common.js";
+import { fmsToCommonProject, type CommonProject } from "../mapper/common.js";
+import { optimizeCommonProject } from "../optimizer/common.js";
 import { inspectProject, readFmsFile } from "../parser/fms/index.js";
 import { readTextFms } from "../parser/fms/textReader.js";
 import { writeFur } from "../writer/fur/index.js";
 
 const root = join(import.meta.dirname, "..", "..");
+
+function optimized(common: CommonProject): CommonProject {
+  return optimizeCommonProject(common);
+}
 
 describe("FMS Reader", () => {
   it("reads a FamiStudio Text export", async () => {
@@ -273,7 +278,7 @@ describe("FMS Reader", () => {
   });
 
   it("carries the active volume onto retriggered notes without explicit volume", () => {
-    const common = fmsToCommonProject({
+    const common = optimized(fmsToCommonProject({
       format: "text-fms",
       name: "Volume Carry",
       pal: false,
@@ -315,7 +320,7 @@ describe("FMS Reader", () => {
           ]
         }
       ]
-    });
+    }));
 
     expect(common.song.channels[0]?.patterns[0]?.rows.find((row) => row.row === 120)).toMatchObject({
       note: 129,
@@ -330,7 +335,7 @@ describe("FMS Reader", () => {
   });
 
   it("preserves FamiStudio frame rows by default", () => {
-    const common = fmsToCommonProject({
+    const common = optimized(fmsToCommonProject({
       format: "binary-fms",
       name: "Scale Fixture",
       author: "Codex",
@@ -373,7 +378,7 @@ describe("FMS Reader", () => {
           ]
         }
       ]
-    });
+    }));
 
     expect(common.song.rowScale).toBe(1);
     expect(common.song.patternLength).toBe(256);
@@ -386,7 +391,7 @@ describe("FMS Reader", () => {
   });
 
   it("repeats the last noise note on effect-only volume rows", () => {
-    const common = fmsToCommonProject({
+    const common = optimized(fmsToCommonProject({
       format: "binary-fms",
       name: "Noise Fixture",
       author: "Codex",
@@ -430,7 +435,7 @@ describe("FMS Reader", () => {
           ]
         }
       ]
-    });
+    }));
 
     expect(common.song.channels[0]?.patterns[0]?.rows.map((row) => ({ row: row.row, note: row.note, duration: row.duration, volume: row.volume }))).toEqual([
       { row: 194, note: 109, duration: 4, volume: 12 },
@@ -440,7 +445,7 @@ describe("FMS Reader", () => {
   });
 
   it("carries note-off across ordered pattern boundaries", () => {
-    const common = fmsToCommonProject({
+    const common = optimized(fmsToCommonProject({
       format: "binary-fms",
       name: "Boundary Fixture",
       author: "Codex",
@@ -490,7 +495,7 @@ describe("FMS Reader", () => {
           ]
         }
       ]
-    });
+    }));
     const nextPattern = common.song.channels[0]?.patterns[1];
 
     expect(nextPattern?.rows.find((row) => row.row === 0)).toMatchObject({ note: 107, volume: 9 });
@@ -503,7 +508,7 @@ describe("FMS Reader", () => {
     if (!existsSync(samplePath)) return;
 
     const project = await readFmsFile(samplePath);
-    const common = fmsToCommonProject(project);
+    const common = optimized(fmsToCommonProject(project));
     const noiseChannel = common.song.channels.find((channel) => channel.target === "GB Noise");
     const noisePattern0 = noiseChannel?.patterns[0];
     const sequence08Pattern = noiseChannel?.patterns[noiseChannel.order[8] ?? 0];
