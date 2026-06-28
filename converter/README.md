@@ -113,6 +113,8 @@ Phase 1 preserves these FamiStudio structures:
 
 NSF conversion currently relies on FamiStudio's NSF importer. The UI lists NSF songs, imports each song through FamiStudio, embeds the configured `.fuw` wavetable for GB Wave usage, and saves one `.fur` per NSF song.
 
+Instrument `DutyCycle` envelopes are written as Furnace `MA` duty macros so FamiStudio/NES duty 0-3 maps to the Game Boy square duty setting instead of being lost in the generic GB instrument feature.
+
 ## Effect Conversion
 
 | FamiStudio effect | Furnace effect |

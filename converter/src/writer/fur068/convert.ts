@@ -1,5 +1,5 @@
 import { deflateSync } from "node:zlib";
-import type { CommonChannel, CommonPattern, CommonProject } from "../../mapper/common.js";
+import type { CommonChannel, CommonInstrument, CommonPattern, CommonProject } from "../../mapper/common.js";
 import { BinaryWriter } from "../fur/binaryWriter.js";
 
 const VERSION = 232;
@@ -25,8 +25,8 @@ export function writeFur068FromCommon(project: CommonProject): Buffer {
   const pointers = writeInfo(w, project, channels, patterns);
   const instrumentPointers =
     project.instruments.length > 0
-      ? project.instruments.map((instrument) => writeGbInstrument(w, instrument.name))
-      : [writeGbInstrument(w, "Default")];
+      ? project.instruments.map((instrument) => writeGbInstrument(w, instrument))
+      : [writeGbInstrument(w, { index: 0, name: "Default", source: { name: "Default", envelopes: [], dpcmMappings: [] } })];
   const wavetablePointers = (project.wavetables ?? []).map((wavetable) => writeRawBlock(w, wavetable.block));
   const patternPointers = patterns.map((pattern) => writePattern(w, project.song.patternLength, pattern));
   const assetDirPointers = [writeAssetDir(w), writeAssetDir(w), writeAssetDir(w)];
@@ -144,11 +144,12 @@ function writeInfo(
   return { instrumentPointers, wavetablePointers, patternPointers, assetDirs };
 }
 
-function writeGbInstrument(w: BinaryWriter, name: string): number {
+function writeGbInstrument(w: BinaryWriter, instrument: CommonInstrument): number {
   return w.block("INS2", () => {
     w.u16(VERSION);
     w.u16(2);
-    writeFeature(w, "NA", () => w.string(name));
+    writeFeature(w, "NA", () => w.string(instrument.name));
+    writeGbDutyMacro(w, instrument);
     writeFeature(w, "GB", () => {
       w.u8(0x0f);
       w.u8(64);
@@ -156,6 +157,24 @@ function writeGbInstrument(w: BinaryWriter, name: string): number {
       w.u8(0);
     });
     w.ascii("EN", 2);
+  });
+}
+
+function writeGbDutyMacro(w: BinaryWriter, instrument: CommonInstrument): void {
+  const duty = instrument.source.envelopes.find((envelope) => envelope.type === "DutyCycle")?.values[0] ?? 0;
+  const clampedDuty = Math.max(0, Math.min(3, duty));
+  writeFeature(w, "MA", () => {
+    w.u16(8);
+    w.u8(2);
+    w.u8(1);
+    w.u8(0xff);
+    w.u8(0xff);
+    w.u8(0);
+    w.u8(1);
+    w.u8(0);
+    w.u8(1);
+    w.u8(clampedDuty);
+    w.u8(0xff);
   });
 }
 

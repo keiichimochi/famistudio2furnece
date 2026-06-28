@@ -78,6 +78,63 @@ describe("Furnace 0.6.8.x parser", () => {
     expect(parsed.patterns[0]?.rows[1]).toMatchObject({ row: 4, note: 180 });
   });
 
+  it("writes FamiStudio DutyCycle envelopes as Furnace duty macros", () => {
+    const common = fmsToCommonProject({
+      format: "text-fms",
+      name: "Duty Fixture",
+      pal: false,
+      expansionMask: 0,
+      instruments: [
+        { id: 0, name: "Duty 0", envelopes: [], dpcmMappings: [] },
+        { id: 1, name: "Duty 2", envelopes: [{ type: "DutyCycle", length: 1, loop: -1, release: -1, relative: false, values: [2] }], dpcmMappings: [] }
+      ],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Song",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 64,
+            beatLength: 4,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 0,
+              name: "Square1",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "P0",
+                  channel: "Square1",
+                  notes: [{ time: 0, value: 49, flags: 0, slide: 0, instrumentId: 1, duration: 4, effectMask: 0, effects: {} }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const data = normalizeFurData(writeFur068FromCommon(common));
+    const parsed = readFurBuffer(data);
+    const dutyInstrument = parsed.instruments[1];
+    expect(dutyInstrument?.name).toBe("Duty 2");
+
+    const instrumentBytes = data.subarray(dutyInstrument.pointer, dutyInstrument.pointer + 8 + dutyInstrument.size);
+    const macroOffset = instrumentBytes.indexOf(Buffer.from("MA"));
+    expect(macroOffset).toBeGreaterThan(0);
+    expect([...instrumentBytes.subarray(macroOffset, macroOffset + 16)]).toEqual([
+      0x4d, 0x41, 0x0c, 0x00, 0x08, 0x00, 0x02, 0x01, 0xff, 0xff, 0x00, 0x01, 0x00, 0x01, 0x02, 0xff
+    ]);
+  });
+
   it("writes orders in Furnace 0.6.8.3 channel-major layout", () => {
     const fur = writeFur068FromCommon({
       name: "Fixture",
