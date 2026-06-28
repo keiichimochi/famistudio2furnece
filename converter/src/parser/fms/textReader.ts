@@ -88,17 +88,19 @@ export function readTextFms(text: string): FmsProject {
     }
 
     if (line.indent === 1 && line.keyword === "Song") {
+      const noteLength = line.attrs.NoteLength ? toInt(line.attrs.NoteLength, 10) : undefined;
+      const patternLength = toInt(line.attrs.PatternLength, 0);
       currentSong = {
         name: line.attrs.Name ?? "Unnamed Song",
         length: toInt(line.attrs.Length, 0),
         loopPoint: toInt(line.attrs.LoopPoint, 0),
         tempo: {
           mode: line.attrs.FamiTrackerTempo ? "FamiTracker" : "FamiStudio",
-          patternLength: toInt(line.attrs.PatternLength, 0),
+          patternLength: patternLength * (noteLength ?? 1),
           beatLength: toInt(line.attrs.BeatLength, 0),
           famitrackerTempo: toInt(line.attrs.FamiTrackerTempo, 150),
           famitrackerSpeed: toInt(line.attrs.FamiTrackerSpeed, 6),
-          noteLength: line.attrs.NoteLength ? toInt(line.attrs.NoteLength, 10) : undefined,
+          noteLength,
           groove: parseIntList(line.attrs.Groove)
         },
         channels: []

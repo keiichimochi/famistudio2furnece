@@ -164,7 +164,7 @@ describe("FMS Reader", () => {
               ],
               "mode": "FamiStudio",
               "noteLength": 4,
-              "patternLength": 16,
+              "patternLength": 64,
             },
           },
         ],
@@ -229,6 +229,7 @@ describe("FMS Reader", () => {
 \t\t\tPatternInstance Time="0" Pattern="Pattern 1"`);
 
     const channel = project.songs[0]?.channels[0];
+    expect(project.songs[0]?.tempo.patternLength).toBe(256);
     expect(project.instruments[0]?.id).toBe(0);
     expect(channel?.order).toEqual([0, 1]);
     expect(channel?.patterns[0]?.notes[0]).toMatchObject({
