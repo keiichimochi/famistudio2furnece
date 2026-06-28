@@ -272,6 +272,57 @@ describe("FMS Reader", () => {
     expect(triangle?.patterns[1]?.rows[0]).toMatchObject({ row: 0, note: 108 });
   });
 
+  it("carries the active volume onto retriggered notes without explicit volume", () => {
+    const common = fmsToCommonProject({
+      format: "text-fms",
+      name: "Volume Carry",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 0, name: "Lead", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Song",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 256,
+            beatLength: 4,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 1,
+              name: "Square2",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "P0",
+                  channel: "Square2",
+                  notes: [
+                    { time: 114, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 2 } },
+                    { time: 120, value: 58, flags: 0, slide: 0, instrumentId: 0, duration: 8, effectMask: 0, effects: {} }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(common.song.channels[0]?.patterns[0]?.rows.find((row) => row.row === 120)).toMatchObject({
+      note: 129,
+      volume: 2
+    });
+  });
+
   it("keeps fixture files present for FF3-oriented golden replacement", async () => {
     await expect(readFile(join(root, "fixtures", "battle.fms"))).resolves.toBeInstanceOf(Buffer);
     await expect(readFile(join(root, "fixtures", "town.fms"))).resolves.toBeInstanceOf(Buffer);

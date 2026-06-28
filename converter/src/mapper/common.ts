@@ -181,10 +181,15 @@ function mapPattern(
 ): CommonPattern {
   const rows: CommonNote[] = [];
   let lastNoiseNote: Pick<CommonNote, "note" | "instrument"> | undefined;
+  let currentVolume: number | undefined;
 
   for (const fmsNote of pattern.notes) {
     const row = mapNote(fmsNote, instrumentById, warnings, rowScale);
     if (!row) continue;
+    if (row.note !== undefined && row.note < 180 && row.volume === undefined && currentVolume !== undefined) {
+      row.volume = currentVolume;
+    }
+    if (row.volume !== undefined) currentVolume = row.volume;
     if (target === "GB Noise" && row.note !== undefined && row.note < 180) {
       lastNoiseNote = { note: row.note, instrument: row.instrument };
     } else if (target === "GB Noise" && row.note !== undefined) {
