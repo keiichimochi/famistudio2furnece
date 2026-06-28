@@ -383,11 +383,11 @@ function readBytes(reader: FurBinaryReader, count: number): number[] {
 }
 
 function readOrders(reader: FurBinaryReader, channelCount: number, ordersLength: number): number[][] {
-  const orders: number[][] = [];
-  for (let channel = 0; channel < channelCount; channel++) {
-    const channelOrders: number[] = [];
-    for (let order = 0; order < ordersLength; order++) channelOrders.push(reader.u8());
-    orders.push(channelOrders);
+  const orders: number[][] = Array.from({ length: channelCount }, () => []);
+  for (let order = 0; order < ordersLength; order++) {
+    for (let channel = 0; channel < channelCount; channel++) {
+      orders[channel]?.push(reader.u8());
+    }
   }
   return orders;
 }

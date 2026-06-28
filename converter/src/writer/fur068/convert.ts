@@ -23,7 +23,10 @@ export function writeFur068FromCommon(project: CommonProject): Buffer {
   w.i32(0);
 
   const pointers = writeInfo(w, project, channels, patterns);
-  const instrumentPointers = [writeGbInstrument(w, "Default")];
+  const instrumentPointers =
+    project.instruments.length > 0
+      ? project.instruments.map((instrument) => writeGbInstrument(w, instrument.name))
+      : [writeGbInstrument(w, "Default")];
   const patternPointers = patterns.map((pattern) => writePattern(w, project.song.patternLength, pattern));
   const assetDirPointers = [writeAssetDir(w), writeAssetDir(w), writeAssetDir(w)];
 
@@ -65,7 +68,8 @@ function writeInfo(
     w.u16(Math.min(project.song.ordersLength, 256));
     w.u8(4);
     w.u8(16);
-    w.u16(1);
+    const instrumentCount = Math.max(1, project.instruments.length);
+    w.u16(instrumentCount);
     w.u16(0);
     w.u16(0);
     w.i32(patterns.length);
@@ -83,13 +87,15 @@ function writeInfo(
     writeZeros(w, 20);
 
     instrumentPointers = w.tell();
-    w.i32(0);
+    for (let i = 0; i < Math.max(1, project.instruments.length); i++) w.i32(0);
     patternPointers = w.tell();
     for (let i = 0; i < patterns.length; i++) w.i32(0);
 
     const ordersLength = Math.min(project.song.ordersLength, 256);
-    for (const channel of channels) {
-      for (let i = 0; i < ordersLength; i++) w.u8(channel.order[i] ?? 0);
+    for (let order = 0; order < ordersLength; order++) {
+      for (const channel of channels) {
+        w.u8(channel.order[order] ?? 0);
+      }
     }
     for (let i = 0; i < 4; i++) w.u8(1);
     for (let i = 0; i < 4; i++) w.u8(1);

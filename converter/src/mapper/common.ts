@@ -54,7 +54,16 @@ const channelMap: Record<string, CommonChannel["target"] | undefined> = {
   Noise: "GB Noise"
 };
 
-export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonProject {
+export type FmsToCommonOptions = {
+  /**
+   * Number of FamiStudio time units represented by one Furnace row.
+   * Use 1 to preserve frame-level timing exactly. Use higher values only
+   * when intentionally quantizing tracker rows.
+   */
+  rowScale?: number;
+};
+
+export function fmsToCommonProject(project: FmsProject, songIndex = 0, options: FmsToCommonOptions = {}): CommonProject {
   const song = project.songs[songIndex];
   if (!song) throw new Error(`Song index ${songIndex} does not exist.`);
 
@@ -64,7 +73,7 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
   project.instruments.forEach((instrument, index) => {
     if (instrument.id !== undefined) instrumentById.set(instrument.id, index);
   });
-  const rowScale = mapFamiStudioRowScale(song);
+  const rowScale = options.rowScale ?? mapFamiStudioRowScale(song);
 
   const channels = song.channels
     .filter((channel) => channel.name !== "DPCM")
@@ -84,7 +93,7 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
       author: project.author ?? "",
       patternLength: Math.min(Math.max(1, Math.ceil((song.tempo.patternLength || 64) / rowScale)), 256),
       ordersLength: song.length,
-      speed: mapFamiStudioSpeed(song),
+      speed: mapFamiStudioSpeed(song, rowScale),
       tempo: song.tempo.famitrackerTempo || 150,
       rowScale,
       channels
@@ -93,13 +102,13 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
   };
 }
 
-function mapFamiStudioSpeed(song: FmsSong): number {
-  return Math.max(1, song.tempo.groove[0] ?? song.tempo.noteLength ?? song.tempo.famitrackerSpeed ?? 6);
+function mapFamiStudioSpeed(song: FmsSong, rowScale: number): number {
+  if (song.tempo.mode === "FamiStudio") return Math.max(1, rowScale);
+  return Math.max(1, song.tempo.famitrackerSpeed ?? 6);
 }
 
-function mapFamiStudioRowScale(song: FmsSong): number {
-  if (song.tempo.mode !== "FamiStudio" || !song.tempo.noteLength) return 1;
-  return Math.max(1, Math.round(song.tempo.beatLength / song.tempo.noteLength));
+function mapFamiStudioRowScale(_song: FmsSong): number {
+  return 1;
 }
 
 function buildInstruments(instruments: FmsInstrument[]): CommonInstrument[] {
@@ -185,7 +194,8 @@ function mapNote(
   }
 
   const row = Math.max(0, Math.round(note.time / rowScale));
-  const duration = note.duration && note.duration > 0 ? Math.max(1, Math.round(note.duration / rowScale)) : undefined;
+  const duration =
+    note.duration && note.duration > 0 ? Math.max(1, Math.round((note.time + note.duration) / rowScale) - row) : undefined;
   return { row, note: mappedNote, instrument, duration, volume, source: note };
 }
 

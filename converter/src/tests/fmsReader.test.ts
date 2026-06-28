@@ -214,7 +214,7 @@ describe("FMS Reader", () => {
     await expect(readFile(join(root, "fixtures", "boss.fms"))).resolves.toBeInstanceOf(Buffer);
   });
 
-  it("scales FamiStudio rows to Furnace tracker rows", () => {
+  it("preserves FamiStudio frame rows by default", () => {
     const common = fmsToCommonProject({
       format: "binary-fms",
       name: "Scale Fixture",
@@ -260,12 +260,12 @@ describe("FMS Reader", () => {
       ]
     });
 
-    expect(common.song.rowScale).toBe(4);
-    expect(common.song.patternLength).toBe(64);
-    expect(common.song.speed).toBe(8);
+    expect(common.song.rowScale).toBe(1);
+    expect(common.song.patternLength).toBe(256);
+    expect(common.song.speed).toBe(1);
     expect(common.song.channels[0]?.patterns[0]?.rows.map((row) => ({ row: row.row, duration: row.duration }))).toEqual([
-      { row: 0, duration: 1 },
-      { row: 1, duration: 1 }
+      { row: 0, duration: 4 },
+      { row: 4, duration: 4 }
     ]);
   });
 
