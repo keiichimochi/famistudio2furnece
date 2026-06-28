@@ -91,8 +91,9 @@ async function importNsfTrackWithFamiStudio(
   track: NsfTrack,
   options: NsfConversionOptions
 ): Promise<void> {
-  const executable = options.famistudio ?? resolveDefaultFamiStudioExecutable();
+  const executable = resolveFamiStudioCommand(options.famistudio);
   const args = [
+    ...executable.argsPrefix,
     inputPath,
     "famistudio-txt-export",
     outputPath,
@@ -101,18 +102,30 @@ async function importNsfTrackWithFamiStudio(
     `-nsf-import-pattern-length:${options.patternLength ?? 256}`
   ];
   try {
-    await execFileAsync(executable, args, { timeout: 180_000, maxBuffer: 1024 * 1024 * 8 });
+    await execFileAsync(executable.command, args, { timeout: 180_000, maxBuffer: 1024 * 1024 * 8 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`FamiStudio NSF import failed for song ${track.index}: ${detail}`);
   }
 }
 
-function resolveDefaultFamiStudioExecutable(): string {
-  if (process.env.FAMISTUDIO_CLI) return process.env.FAMISTUDIO_CLI;
-  if (process.platform === "darwin") return "/Applications/FamiStudio.app/Contents/MacOS/main.command";
-  if (process.platform === "win32") return "FamiStudio.exe";
-  return "FamiStudio";
+function resolveFamiStudioCommand(override?: string): { command: string; argsPrefix: string[] } {
+  const executable = override ?? process.env.FAMISTUDIO_CLI;
+  if (executable) {
+    if (process.platform === "darwin" && executable.endsWith("/main.command")) {
+      return macAppDotnetCommand(executable.replace(/\/main\.command$/, "/FamiStudio.dll"));
+    }
+    return { command: executable, argsPrefix: [] };
+  }
+  if (process.platform === "darwin") {
+    return macAppDotnetCommand("/Applications/FamiStudio.app/Contents/MacOS/FamiStudio.dll");
+  }
+  if (process.platform === "win32") return { command: "FamiStudio.exe", argsPrefix: [] };
+  return { command: "FamiStudio", argsPrefix: [] };
+}
+
+function macAppDotnetCommand(dllPath: string): { command: string; argsPrefix: string[] } {
+  return { command: "/usr/local/share/dotnet/dotnet", argsPrefix: [dllPath] };
 }
 
 function sanitizeFileName(value: string): string {

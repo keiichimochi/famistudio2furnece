@@ -171,14 +171,18 @@ const INDEX_HTML = String.raw`<!doctype html>
     convert.addEventListener("click", async () => {
       if (!nsfFile) return;
       status.textContent = "変換中...";
-      const response = await fetch("/api/convert?name=" + encodeURIComponent(nsfFile.name), {
-        method: "POST",
-        body: await nsfFile.arrayBuffer()
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "convert failed");
-      await saveFiles(result.files);
-      status.textContent = result.files.length + " file(s) written.";
+      try {
+        const response = await fetch("/api/convert?name=" + encodeURIComponent(nsfFile.name), {
+          method: "POST",
+          body: await nsfFile.arrayBuffer()
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "convert failed");
+        await saveFiles(result.files);
+        status.textContent = result.files.length + " file(s) written.";
+      } catch (error) {
+        status.textContent = "変換エラー: " + (error && error.message ? error.message : String(error));
+      }
     });
 
     async function loadFile(file) {
