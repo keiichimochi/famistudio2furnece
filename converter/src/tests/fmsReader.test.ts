@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fmsToCommonProject } from "../mapper/common.js";
 import { inspectProject, readFmsFile } from "../parser/fms/index.js";
+import { readTextFms } from "../parser/fms/textReader.js";
 import { writeFur } from "../writer/fur/index.js";
 
 const root = join(import.meta.dirname, "..", "..");
@@ -56,6 +57,7 @@ describe("FMS Reader", () => {
             ],
             "expansion": "None",
             "folder": undefined,
+            "id": 0,
             "name": "Lead",
           },
         ],
@@ -74,6 +76,7 @@ describe("FMS Reader", () => {
                   {
                     "channel": "Square1",
                     "channelType": 0,
+                    "id": 0,
                     "name": "A",
                     "notes": [],
                   },
@@ -90,6 +93,7 @@ describe("FMS Reader", () => {
                   {
                     "channel": "Square2",
                     "channelType": 1,
+                    "id": 0,
                     "name": "A",
                     "notes": [],
                   },
@@ -106,6 +110,7 @@ describe("FMS Reader", () => {
                   {
                     "channel": "Triangle",
                     "channelType": 2,
+                    "id": 0,
                     "name": "A",
                     "notes": [],
                   },
@@ -122,6 +127,7 @@ describe("FMS Reader", () => {
                   {
                     "channel": "Noise",
                     "channelType": 3,
+                    "id": 0,
                     "name": "A",
                     "notes": [],
                   },
@@ -138,6 +144,7 @@ describe("FMS Reader", () => {
                   {
                     "channel": "DPCM",
                     "channelType": 4,
+                    "id": 0,
                     "name": "A",
                     "notes": [],
                   },
@@ -207,6 +214,40 @@ describe("FMS Reader", () => {
       Tempo : 150
       Speed : 6"
     `);
+  });
+
+  it("reads FamiStudio NSF import text pattern instances and note rows", () => {
+    const project = readTextFms(`Project Version="4.5.1" TempoMode="FamiStudio" Name="Text Import"
+\tInstrument Name="Duty 2"
+\tSong Name="Song 1" Length="2" LoopPoint="0" PatternLength="32" BeatLength="4" NoteLength="8" Groove="8"
+\t\tChannel Type="Square1"
+\t\t\tPattern Name="Pattern 1"
+\t\t\t\tNote Time="4" Value="C4" Duration="8" Instrument="Duty 2" Volume="10" FinePitch="-1"
+\t\t\tPatternInstance Time="1" Pattern="Pattern 2"
+\t\t\tPattern Name="Pattern 2"
+\t\t\t\tNote Time="0" Volume="7"
+\t\t\tPatternInstance Time="0" Pattern="Pattern 1"`);
+
+    const channel = project.songs[0]?.channels[0];
+    expect(project.instruments[0]?.id).toBe(0);
+    expect(channel?.order).toEqual([0, 1]);
+    expect(channel?.patterns[0]?.notes[0]).toMatchObject({
+      time: 4,
+      value: 49,
+      duration: 8,
+      instrumentId: 0,
+      effects: { volume: 10, finePitch: -1 }
+    });
+    expect(channel?.patterns[1]?.notes[0]).toMatchObject({
+      time: 0,
+      value: 0xff,
+      effects: { volume: 7 }
+    });
+
+    const common = fmsToCommonProject(project);
+    expect(common.song.channels[0]?.order).toEqual([0, 1]);
+    expect(common.song.channels[0]?.patterns[0]?.rows.length).toBe(1);
+    expect(common.song.channels[0]?.patterns[1]?.rows[0]).toMatchObject({ row: 0, volume: 7 });
   });
 
   it("keeps fixture files present for FF3-oriented golden replacement", async () => {
