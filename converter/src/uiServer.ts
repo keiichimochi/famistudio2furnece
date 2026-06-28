@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { basename, extname, isAbsolute, join, relative } from "node:path";
+import { renderFurToMp3 } from "./audioExport.js";
 import { writeNsfBufferProjectFiles } from "./nsfConvert.js";
 import { readNsfBuffer } from "./parser/nsf/index.js";
 
@@ -11,6 +12,8 @@ export type UiServerOptions = {
   duration?: number;
   patternLength?: number;
   outputRoot?: string;
+  furnace?: string;
+  ffmpeg?: string;
 };
 
 export function startUiServer(options: UiServerOptions): void {
@@ -59,11 +62,37 @@ async function route(request: IncomingMessage, response: ServerResponse, options
     });
     return;
   }
+  if (request.method === "POST" && url.pathname === "/api/render-mp3") {
+    const json = JSON.parse((await readBody(request)).toString("utf8")) as { fur?: unknown };
+    if (typeof json.fur !== "string") throw new Error("Missing FUR path.");
+    const fur = await resolveOutputFile(json.fur, options.outputRoot ?? join(process.cwd(), "out"));
+    const output = await renderFurToMp3(fur, {
+      furnace: options.furnace,
+      ffmpeg: options.ffmpeg
+    });
+    sendJson(response, 200, output);
+    return;
+  }
+  if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/api/file") {
+    const path = url.searchParams.get("path");
+    if (!path) throw new Error("Missing file path.");
+    const file = await resolveOutputFile(path, options.outputRoot ?? join(process.cwd(), "out"));
+    await sendFile(request, response, file);
+    return;
+  }
   if (request.method === "GET" && url.pathname === "/api/wavetable/download" && options.wavetable) {
     send(response, 200, contentType(options.wavetable), await readFile(options.wavetable));
     return;
   }
   sendJson(response, 404, { error: "Not found" });
+}
+
+async function resolveOutputFile(path: string, outputRoot: string): Promise<string> {
+  const root = await realpath(outputRoot);
+  const file = await realpath(path);
+  const child = relative(root, file);
+  if (child.startsWith("..") || isAbsolute(child)) throw new Error(`File is outside the output directory: ${path}`);
+  return file;
 }
 
 async function readBody(request: IncomingMessage): Promise<Buffer> {
@@ -87,8 +116,45 @@ function send(response: ServerResponse, status: number, type: string, body: stri
   response.end(body);
 }
 
+async function sendFile(request: IncomingMessage, response: ServerResponse, path: string): Promise<void> {
+  const info = await stat(path);
+  const headers = {
+    "content-type": contentType(path),
+    "content-disposition": `inline; filename="${basename(path).replace(/"/g, "")}"`,
+    "cache-control": "no-store",
+    "access-control-allow-origin": "http://127.0.0.1",
+    "accept-ranges": "bytes"
+  };
+  const range = request.headers.range;
+  if (typeof range === "string") {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (match) {
+      const start = match[1] === "" ? 0 : Number.parseInt(match[1], 10);
+      const end = match[2] === "" ? info.size - 1 : Math.min(Number.parseInt(match[2], 10), info.size - 1);
+      if (Number.isFinite(start) && Number.isFinite(end) && start <= end && start < info.size) {
+        const body = (await readFile(path)).subarray(start, end + 1);
+        response.writeHead(206, {
+          ...headers,
+          "content-range": `bytes ${start}-${end}/${info.size}`,
+          "content-length": body.length
+        });
+        response.end(request.method === "HEAD" ? undefined : body);
+        return;
+      }
+    }
+  }
+  response.writeHead(200, {
+    ...headers,
+    "content-length": info.size
+  });
+  response.end(request.method === "HEAD" ? undefined : await readFile(path));
+}
+
 function contentType(path: string): string {
   if (extname(path) === ".fuw") return "application/octet-stream";
+  if (extname(path) === ".mp3") return "audio/mpeg";
+  if (extname(path) === ".wav") return "audio/wav";
+  if (extname(path) === ".fur") return "application/octet-stream";
   return "application/octet-stream";
 }
 
@@ -104,6 +170,7 @@ const INDEX_HTML = String.raw`<!doctype html>
     main { max-width: 1040px; margin: 0 auto; padding: 28px; }
     h1 { font-size: 22px; margin: 0 0 18px; font-weight: 650; }
     button { background: #2e7bd8; color: white; border: 0; border-radius: 6px; padding: 9px 13px; font-weight: 650; cursor: pointer; }
+    button.secondary { background: #29435f; }
     button:disabled { opacity: .45; cursor: default; }
     .drop { border: 1px dashed #66809b; border-radius: 8px; min-height: 150px; display: grid; place-items: center; background: #16202b; }
     .drop.drag { border-color: #70b7ff; background: #18293a; }
@@ -114,6 +181,9 @@ const INDEX_HTML = String.raw`<!doctype html>
     th { color: #9bb8d4; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; }
     code { color: #9fd0ff; }
     .status { margin-top: 14px; white-space: pre-wrap; color: #bfd0df; }
+    .path { max-width: 520px; overflow-wrap: anywhere; }
+    .audio-cell { min-width: 280px; }
+    audio { width: 100%; max-width: 360px; height: 32px; display: block; margin-top: 7px; }
   </style>
 </head>
 <body>
@@ -136,6 +206,10 @@ const INDEX_HTML = String.raw`<!doctype html>
       <thead><tr><th>#</th><th>曲名</th><th>init song</th></tr></thead>
       <tbody></tbody>
     </table>
+    <table id="files" hidden>
+      <thead><tr><th>#</th><th>FUR</th><th>MP3確認</th></tr></thead>
+      <tbody></tbody>
+    </table>
     <div id="status" class="status"></div>
   </main>
   <script>
@@ -146,6 +220,8 @@ const INDEX_HTML = String.raw`<!doctype html>
     const summary = document.querySelector("#summary");
     const table = document.querySelector("#tracks");
     const tbody = table.querySelector("tbody");
+    const filesTable = document.querySelector("#files");
+    const filesBody = filesTable.querySelector("tbody");
     const status = document.querySelector("#status");
     const wave = document.querySelector("#wave");
     let nsfFile = null;
@@ -177,8 +253,38 @@ const INDEX_HTML = String.raw`<!doctype html>
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "convert failed");
         status.textContent = result.files.length + " track(s) written to:\n" + result.outputDir;
+        renderConvertedFiles(result.files);
       } catch (error) {
         status.textContent = "変換エラー: " + (error && error.message ? error.message : String(error));
+      }
+    });
+    filesTable.addEventListener("click", async event => {
+      const button = event.target.closest("button[data-index]");
+      if (!button) return;
+      const row = button.closest("tr");
+      const audioCell = row.querySelector("[data-audio]");
+      const file = convertedFiles[Number(button.dataset.index)];
+      if (!file) return;
+      button.disabled = true;
+      button.textContent = "変換中...";
+      audioCell.textContent = "FurnaceでWAVを書き出してMP3へ変換中...";
+      try {
+        const response = await fetch("/api/render-mp3", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fur: file.fur })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "MP3 render failed");
+        const url = "/api/file?path=" + encodeURIComponent(result.mp3);
+        audioCell.innerHTML = "<code class=\"path\">" + escapeHtml(result.mp3) + "</code>" +
+          "<audio controls preload=\"metadata\" src=\"" + url + "\"></audio>";
+        button.textContent = "MP3再生成";
+        button.disabled = false;
+      } catch (error) {
+        audioCell.textContent = "MP3変換エラー: " + (error && error.message ? error.message : String(error));
+        button.textContent = "MP3";
+        button.disabled = false;
       }
     });
 
@@ -201,6 +307,18 @@ const INDEX_HTML = String.raw`<!doctype html>
       table.hidden = false;
       convert.disabled = false;
       status.textContent = "";
+      filesTable.hidden = true;
+      filesBody.innerHTML = "";
+    }
+    let convertedFiles = [];
+    function renderConvertedFiles(files) {
+      convertedFiles = files;
+      filesBody.innerHTML = files.map((file, index) =>
+        "<tr><td>" + String(index + 1).padStart(2, "0") + "</td>" +
+        "<td class=\"path\"><code>" + escapeHtml(file.fur) + "</code></td>" +
+        "<td class=\"audio-cell\"><button class=\"secondary\" data-index=\"" + index + "\">MP3</button><div data-audio class=\"muted\"></div></td></tr>"
+      ).join("");
+      filesTable.hidden = false;
     }
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[ch]));

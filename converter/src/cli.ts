@@ -76,14 +76,18 @@ program
   .option("-p, --port <port>", "local UI port", (value) => Number.parseInt(value, 10), 51737)
   .option("-w, --wavetable <file>", "Furnace .fuw wavetable to embed", join(import.meta.dirname, "..", "..", "sample", "wavetable.fuw"))
   .option("--famistudio <file>", "FamiStudio CLI executable")
+  .option("--furnace <file>", "Furnace CLI executable")
+  .option("--ffmpeg <file>", "ffmpeg executable")
   .option("--duration <sec>", "NSF capture duration in seconds", (value) => Number.parseInt(value, 10), 120)
   .option("--pattern-length <rows>", "FamiStudio NSF import pattern length", (value) => Number.parseInt(value, 10), 256)
   .description("Start the local NSF batch conversion UI")
-  .action((options: { port: number; wavetable?: string; famistudio?: string; duration: number; patternLength: number }) => {
+  .action((options: { port: number; wavetable?: string; famistudio?: string; furnace?: string; ffmpeg?: string; duration: number; patternLength: number }) => {
     startUiServer({
       port: options.port,
       wavetable: options.wavetable,
       famistudio: options.famistudio,
+      furnace: options.furnace,
+      ffmpeg: options.ffmpeg,
       duration: options.duration,
       patternLength: options.patternLength,
       outputRoot: join(import.meta.dirname, "..", "out")
