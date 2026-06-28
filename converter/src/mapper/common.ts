@@ -39,10 +39,16 @@ export type CommonSong = {
   channels: CommonChannel[];
 };
 
+export type CommonWavetable = {
+  name: string;
+  block: Buffer;
+};
+
 export type CommonProject = {
   name: string;
   author: string;
   instruments: CommonInstrument[];
+  wavetables?: CommonWavetable[];
   song: CommonSong;
   warnings: string[];
 };

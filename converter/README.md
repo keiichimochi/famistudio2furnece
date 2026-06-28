@@ -1,8 +1,6 @@
 # fms2fur
 
-FamiStudio (`.fms`) projects to Game Boy tracker projects.
-
-Phase 1 is implemented first: project inspection and structural parsing. Conversion writers are intentionally not implemented yet.
+FamiStudio (`.fms`) and NSF (`.nsf`) sources to Game Boy Furnace 0.6.8.3 projects.
 
 ## Requirements
 
@@ -18,7 +16,21 @@ Phase 1 is implemented first: project inspection and structural parsing. Convers
 npm install
 npm run build
 node dist/cli.js inspect fixtures/battle.fms
+node dist/cli.js convert fixtures/battle.fms -o battle.fur
 ```
+
+NSF import uses FamiStudio's command-line NSF importer first, then converts the generated FamiStudio text project through the normal pipeline.
+
+```sh
+node dist/cli.js nsf-inspect music.nsf
+node dist/cli.js nsf-convert music.nsf \
+  --wavetable ../sample/wavetable.fuw \
+  --out-dir ./out
+node dist/cli.js ui \
+  --wavetable ../sample/wavetable.fuw
+```
+
+If FamiStudio is not in the default location, pass `--famistudio <path>` or set `FAMISTUDIO_CLI`.
 
 Output:
 
@@ -47,6 +59,7 @@ DPCM Count : ...
 
 ```txt
 FamiStudio (.fms)
+NSF (.nsf) -> FamiStudio CLI -> FamiStudio text
   -> common JSON IR
   -> Furnace (.fur)
   -> DefleMask (.dmf)
@@ -66,14 +79,14 @@ FamiStudio (.fms)
 
 | Phase | Status |
 | --- | --- |
-| Phase 1 FMS Reader | In progress: binary `.fms` header/Deflate/project summary reader, text export reader, inspect CLI, Vitest coverage |
-| Phase 2 Common JSON | Not started |
-| Phase 3 NES to Game Boy mapping | Not started |
+| Phase 1 FMS Reader | Implemented: binary `.fms`, FamiStudio text, inspect CLI, Vitest coverage |
+| Phase 2 Common JSON | Implemented for current converter path |
+| Phase 3 NES to Game Boy mapping | Implemented for pulse/triangle/noise/DPCM mute |
 | Phase 4 Envelope conversion | Not started |
 | Phase 5 Pattern conversion | Not started |
 | Phase 6 Effect conversion | Not started |
 | Phase 7 Instrument conversion | Not started |
-| Phase 8 Furnace writer | Not started |
+| Phase 8 Furnace writer | In progress: Furnace 0.6.8.3 `.fur` writer, FUW wavetable embedding |
 | Phase 9 DefleMask writer | Not started |
 | Phase 10 Full convert CLI | Not started |
 
@@ -89,7 +102,7 @@ Phase 1 preserves these FamiStudio structures:
 - Envelopes
 - DPCM samples and mappings
 
-No musical conversion is performed yet.
+NSF conversion currently relies on FamiStudio's NSF importer. The UI lists NSF songs, imports each song through FamiStudio, embeds the configured `.fuw` wavetable for GB Wave usage, and saves one `.fur` per NSF song.
 
 ## Unsupported Effects
 

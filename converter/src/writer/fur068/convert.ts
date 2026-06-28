@@ -27,11 +27,17 @@ export function writeFur068FromCommon(project: CommonProject): Buffer {
     project.instruments.length > 0
       ? project.instruments.map((instrument) => writeGbInstrument(w, instrument.name))
       : [writeGbInstrument(w, "Default")];
+  const wavetablePointers = (project.wavetables ?? []).map((wavetable) => writeRawBlock(w, wavetable.block));
   const patternPointers = patterns.map((pattern) => writePattern(w, project.song.patternLength, pattern));
   const assetDirPointers = [writeAssetDir(w), writeAssetDir(w), writeAssetDir(w)];
 
   let cursor = pointers.instrumentPointers;
   for (const pointer of instrumentPointers) {
+    w.patchI32(cursor, pointer);
+    cursor += 4;
+  }
+  cursor = pointers.wavetablePointers;
+  for (const pointer of wavetablePointers) {
     w.patchI32(cursor, pointer);
     cursor += 4;
   }
@@ -54,8 +60,9 @@ function writeInfo(
   project: CommonProject,
   channels: CommonChannel[],
   patterns: PatternRef[]
-): { instrumentPointers: number; patternPointers: number; assetDirs: number } {
+): { instrumentPointers: number; wavetablePointers: number; patternPointers: number; assetDirs: number } {
   let instrumentPointers = 0;
+  let wavetablePointers = 0;
   let patternPointers = 0;
   let assetDirs = 0;
   w.block("INFO", () => {
@@ -70,7 +77,7 @@ function writeInfo(
     w.u8(16);
     const instrumentCount = Math.max(1, project.instruments.length);
     w.u16(instrumentCount);
-    w.u16(0);
+    w.u16(project.wavetables?.length ?? 0);
     w.u16(0);
     w.i32(patterns.length);
 
@@ -88,6 +95,8 @@ function writeInfo(
 
     instrumentPointers = w.tell();
     for (let i = 0; i < Math.max(1, project.instruments.length); i++) w.i32(0);
+    wavetablePointers = w.tell();
+    for (let i = 0; i < (project.wavetables?.length ?? 0); i++) w.i32(0);
     patternPointers = w.tell();
     for (let i = 0; i < patterns.length; i++) w.i32(0);
 
@@ -132,7 +141,7 @@ function writeInfo(
     w.i32(0);
     w.i32(0);
   });
-  return { instrumentPointers, patternPointers, assetDirs };
+  return { instrumentPointers, wavetablePointers, patternPointers, assetDirs };
 }
 
 function writeGbInstrument(w: BinaryWriter, name: string): number {
@@ -242,6 +251,12 @@ function writeFeature(w: BinaryWriter, code: string, body: () => void): void {
 
 function writeAssetDir(w: BinaryWriter): number {
   return w.block("ADIR", () => w.i32(0));
+}
+
+function writeRawBlock(w: BinaryWriter, block: Buffer): number {
+  const pointer = w.tell();
+  w.bytes(block);
+  return pointer;
 }
 
 function collectPatterns(channels: CommonChannel[]): PatternRef[] {
