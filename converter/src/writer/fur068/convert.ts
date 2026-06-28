@@ -164,7 +164,7 @@ function writePattern(w: BinaryWriter, patternLength: number, ref: PatternRef): 
           w.u8(0);
           emptyRows = 0;
         } else {
-          const chunk = Math.min(emptyRows, 129);
+          const chunk = Math.min(emptyRows, 128);
           w.u8(0x80 | (chunk - 2));
           emptyRows -= chunk;
         }
@@ -195,24 +195,40 @@ function buildRowsWithNoteOffs(rows: CommonPattern["rows"], patternLength: numbe
   const result = new Map<number, CommonPattern["rows"][number]>();
   const musicalRows = new Set<number>();
   for (const row of rows) {
-    result.set(row.row, row);
-    if (row.note >= 0 && row.note < 180) musicalRows.add(row.row);
+    const existing = result.get(row.row);
+    result.set(row.row, existing ? mergeRow(existing, row) : row);
+    if (row.note !== undefined && row.note >= 0 && row.note < 180) musicalRows.add(row.row);
   }
   for (const row of rows) {
-    if (row.duration === undefined || row.note >= 180) continue;
+    if (row.duration === undefined || row.note === undefined || row.note >= 180) continue;
     const endRow = row.row + row.duration;
     if (endRow <= row.row || endRow >= patternLength) continue;
     if (musicalRows.has(endRow)) continue;
     const existing = result.get(endRow);
-    result.set(endRow, {
+    const noteOff = {
       row: endRow,
       note: 180,
       instrument: existing?.instrument,
       volume: existing?.volume,
       source: row.source
-    });
+    };
+    result.set(endRow, existing ? mergeRow(existing, noteOff) : noteOff);
   }
   return result;
+}
+
+function mergeRow(
+  base: CommonPattern["rows"][number],
+  next: CommonPattern["rows"][number]
+): CommonPattern["rows"][number] {
+  return {
+    row: base.row,
+    note: next.note ?? base.note,
+    instrument: next.instrument ?? base.instrument,
+    duration: next.duration ?? base.duration,
+    volume: next.volume ?? base.volume,
+    source: next.source
+  };
 }
 
 function writeFeature(w: BinaryWriter, code: string, body: () => void): void {

@@ -2,7 +2,7 @@ import type { FmsChannel, FmsInstrument, FmsNote, FmsPattern, FmsProject, FmsSon
 
 export type CommonNote = {
   row: number;
-  note: number;
+  note?: number;
   instrument?: number;
   duration?: number;
   volume?: number;
@@ -160,9 +160,11 @@ function mapPattern(
   return {
     index,
     name: pattern.name || `Pattern ${index}`,
-    rows: pattern.notes
-      .map((note) => mapNote(note, instrumentById, warnings, rowScale))
-      .filter((note): note is CommonNote => note !== null)
+    rows: mergeRows(
+      pattern.notes
+        .map((note) => mapNote(note, instrumentById, warnings, rowScale))
+        .filter((note): note is CommonNote => note !== null)
+    )
   };
 }
 
@@ -172,7 +174,16 @@ function mapNote(
   warnings: string[],
   rowScale: number
 ): CommonNote | null {
-  if (note.value === 0xff) return null;
+  const row = Math.max(0, Math.round(note.time / rowScale));
+  const volume = typeof note.effects.volume === "number" ? Math.max(0, Math.min(15, note.effects.volume)) : undefined;
+  const unsupportedEffects = Object.keys(note.effects).filter((effect) => effect !== "volume");
+  for (const effect of unsupportedEffects) {
+    addWarning(warnings, `Effect ${effect} is parsed but not converted in this minimal .fur export.`);
+  }
+
+  if (note.value === 0xff) {
+    return volume === undefined ? null : { row, volume, source: note };
+  }
 
   let mappedNote: number;
   if (note.value === 0) {
@@ -187,16 +198,34 @@ function mapNote(
   }
 
   const instrument = note.instrumentId === undefined ? 0 : instrumentById.get(note.instrumentId) ?? 0;
-  const volume = typeof note.effects.volume === "number" ? Math.max(0, Math.min(15, note.effects.volume)) : undefined;
-  const unsupportedEffects = Object.keys(note.effects).filter((effect) => effect !== "volume");
-  for (const effect of unsupportedEffects) {
-    addWarning(warnings, `Effect ${effect} is parsed but not converted in this minimal .fur export.`);
-  }
 
-  const row = Math.max(0, Math.round(note.time / rowScale));
   const duration =
     note.duration && note.duration > 0 ? Math.max(1, Math.round((note.time + note.duration) / rowScale) - row) : undefined;
   return { row, note: mappedNote, instrument, duration, volume, source: note };
+}
+
+function mergeRows(rows: CommonNote[]): CommonNote[] {
+  const merged = new Map<number, CommonNote>();
+  for (const row of rows) {
+    const existing = merged.get(row.row);
+    if (!existing) {
+      merged.set(row.row, row);
+      continue;
+    }
+    merged.set(row.row, mergeRow(existing, row));
+  }
+  return [...merged.values()].sort((a, b) => a.row - b.row);
+}
+
+function mergeRow(base: CommonNote, next: CommonNote): CommonNote {
+  return {
+    row: base.row,
+    note: next.note ?? base.note,
+    instrument: next.instrument ?? base.instrument,
+    duration: next.duration ?? base.duration,
+    volume: next.volume ?? base.volume,
+    source: next.source
+  };
 }
 
 function addWarning(warnings: string[], warning: string): void {

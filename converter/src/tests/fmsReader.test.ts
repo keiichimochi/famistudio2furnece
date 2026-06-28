@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fmsToCommonProject } from "../mapper/common.js";
@@ -267,6 +268,18 @@ describe("FMS Reader", () => {
       { row: 0, duration: 4 },
       { row: 4, duration: 4 }
     ]);
+  });
+
+  it("keeps late Noise effect-only events in the FF3 battle sample when available", async () => {
+    const samplePath = join(root, "..", "sample", "ff3-battle.fms");
+    if (!existsSync(samplePath)) return;
+
+    const project = await readFmsFile(samplePath);
+    const common = fmsToCommonProject(project);
+    const noisePattern0 = common.song.channels.find((channel) => channel.target === "GB Noise")?.patterns[0];
+
+    expect(noisePattern0?.rows.length).toBeGreaterThan(0);
+    expect(noisePattern0?.rows.some((row) => row.row >= 194)).toBe(true);
   });
 
   it("writes a minimal uncompressed Furnace module", async () => {

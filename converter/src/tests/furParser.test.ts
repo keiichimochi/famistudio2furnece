@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deflateSync } from "node:zlib";
+import { fmsToCommonProject } from "../mapper/common.js";
 import { FurBinaryReader } from "../parser/fur/binaryReader.js";
 import { normalizeFurData } from "../parser/fur/index.js";
 import { readFurBuffer } from "../parser/fur/index.js";
@@ -116,6 +117,100 @@ describe("Furnace 0.6.8.x parser", () => {
       [0, 1, 2]
     ]);
   });
+
+  it("does not emit 0xff as an empty-row skip inside PATN data", () => {
+    const fur = writeFur068FromCommon({
+      name: "Fixture",
+      author: "Tester",
+      instruments: [{ index: 0, name: "Default", source: { name: "Default", envelopes: [], dpcmMappings: [] } }],
+      warnings: [],
+      song: {
+        name: "Song",
+        author: "Tester",
+        patternLength: 256,
+        ordersLength: 1,
+        speed: 6,
+        tempo: 150,
+        rowScale: 1,
+        channels: [
+          {
+            source: "Square1",
+            target: "GB Square1",
+            order: [0],
+            patterns: [
+              {
+                index: 0,
+                name: "Long Gap",
+                rows: [
+                  { row: 0, note: 108, source: { time: 0, value: 49, flags: 0, slide: 0, effectMask: 0, effects: {} } },
+                  { row: 200, note: 110, source: { time: 200, value: 51, flags: 0, slide: 0, effectMask: 0, effects: {} } }
+                ]
+              }
+            ]
+          },
+          { source: "Square2", target: "GB Square2", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] },
+          { source: "Triangle", target: "GB Wave", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] },
+          { source: "Noise", target: "GB Noise", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] }
+        ]
+      }
+    });
+    const patternData = extractPatternData(normalizeFurData(fur), 0);
+
+    expect(patternData.at(-1)).toBe(0xff);
+    expect([...patternData.subarray(0, -1)]).not.toContain(0xff);
+  });
+
+  it("keeps FamiStudio effect-only volume rows as Furnace volume-only rows", () => {
+    const common = fmsToCommonProject({
+      format: "binary-fms",
+      name: "Volume Fixture",
+      author: "Tester",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 1, name: "Lead", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Song",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 256,
+            beatLength: 32,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 0,
+              name: "Square1",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "P0",
+                  channel: "Square1",
+                  notes: [
+                    { time: 0, value: 49, flags: 0, slide: 0, instrumentId: 1, duration: 4, effectMask: 0, effects: {} },
+                    { time: 130, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 7 } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const fur = writeFur068FromCommon(common);
+    const parsed = readFurBuffer(fur);
+
+    expect(common.song.channels[0]?.patterns[0]?.rows.find((row) => row.row === 130)).toMatchObject({ volume: 7 });
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 130)).toEqual({ row: 130, volume: 7, effects: [] });
+  });
 });
 
 function fixturePatterns() {
@@ -145,4 +240,18 @@ function extractOrderBytesFromInfo(raw: Buffer, channelCount: number, ordersLeng
   info.skip((instrumentCount + wavetableCount + sampleCount + patternCount) * 4);
   const orderOffset = info.tell();
   return raw.subarray(orderOffset, orderOffset + channelCount * ordersLength);
+}
+
+function extractPatternData(raw: Buffer, patternPointerIndex: number): Buffer {
+  const parsed = readFurBuffer(raw);
+  const pointer = parsed.info.patternPointers[patternPointerIndex];
+  if (pointer === undefined) throw new Error(`Missing pattern pointer ${patternPointerIndex}`);
+  const reader = new FurBinaryReader(raw, pointer);
+  expect(reader.ascii(4)).toBe("PATN");
+  const size = reader.u32();
+  reader.skip(1 + 1 + 2);
+  reader.string();
+  const dataStart = reader.tell();
+  const dataEnd = pointer + 8 + size;
+  return raw.subarray(dataStart, dataEnd);
 }

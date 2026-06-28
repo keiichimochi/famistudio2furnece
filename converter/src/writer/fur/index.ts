@@ -149,7 +149,7 @@ function writePattern(w: BinaryWriter, patternLength: number, channelIndex: numb
           w.u8(0);
           emptyRows = 0;
         } else {
-          const chunk = Math.min(emptyRows, 129);
+          const chunk = Math.min(emptyRows, 128);
           w.u8(0x80 | (chunk - 2));
           emptyRows -= chunk;
         }
@@ -163,11 +163,12 @@ function writePattern(w: BinaryWriter, patternLength: number, channelIndex: numb
         continue;
       }
       flushEmpty();
-      let mask = 0x01;
+      let mask = 0;
+      if (note.note !== undefined) mask |= 0x01;
       if (note.instrument !== undefined) mask |= 0x02;
       if (note.volume !== undefined) mask |= 0x04;
       w.u8(mask);
-      w.u8(note.note);
+      if (note.note !== undefined) w.u8(note.note);
       if (note.instrument !== undefined) w.u8(note.instrument);
       if (note.volume !== undefined) w.u8(note.volume);
     }
