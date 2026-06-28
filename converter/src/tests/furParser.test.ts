@@ -78,7 +78,7 @@ describe("Furnace 0.6.8.x parser", () => {
     expect(parsed.patterns[0]?.rows[1]).toMatchObject({ row: 4, note: 180 });
   });
 
-  it("writes orders in Furnace order-major layout", () => {
+  it("writes orders in Furnace 0.6.8.3 channel-major layout", () => {
     const fur = writeFur068FromCommon({
       name: "Fixture",
       author: "Tester",
@@ -107,7 +107,7 @@ describe("Furnace 0.6.8.x parser", () => {
     const orders = extractOrderBytesFromInfo(raw, 4, 3);
     const parsed = readFurBuffer(fur);
 
-    expect([...orders]).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2]);
+    expect([...orders]).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2]);
     expect(parsed.info.instrumentCount).toBe(2);
     expect(parsed.instruments.map((instrument) => instrument.name)).toEqual(["Lead", "Bass"]);
     expect(parsed.info.orders).toEqual([

@@ -92,8 +92,8 @@ function writeInfo(
     for (let i = 0; i < patterns.length; i++) w.i32(0);
 
     const ordersLength = Math.min(project.song.ordersLength, 256);
-    for (let order = 0; order < ordersLength; order++) {
-      for (const channel of channels) {
+    for (const channel of channels) {
+      for (let order = 0; order < ordersLength; order++) {
         w.u8(channel.order[order] ?? 0);
       }
     }
