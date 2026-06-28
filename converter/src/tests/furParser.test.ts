@@ -269,6 +269,61 @@ describe("Furnace 0.6.8.x parser", () => {
       effects: [{ effect: 0xe5, value: 0x80 }]
     });
   });
+
+  it("maps parsed FamiStudio effects that have safe Furnace equivalents", () => {
+    const common = fmsToCommonProject({
+      format: "binary-fms",
+      name: "Effect Fixture",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 0, name: "Lead", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Song",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 64,
+            beatLength: 4,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 0,
+              name: "Square1",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "P0",
+                  channel: "Square1",
+                  notes: [
+                    { time: 0, value: 49, flags: 0, slide: 0, instrumentId: 0, duration: 16, effectMask: 0, effects: { vibrato: 0x23 } },
+                    { time: 8, value: 0xff, flags: 0, slide: 0, effectMask: 0, effects: { volumeSlide: 0xf1 } },
+                    { time: 16, value: 0xff, flags: 0, slide: 0, effectMask: 0, effects: { dutyCycle: 2 } },
+                    { time: 24, value: 0xff, flags: 0, slide: 0, effectMask: 0, effects: { phaseReset: 1 } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const parsed = readFurBuffer(writeFur068FromCommon(common));
+
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 0)?.effects).toEqual([{ effect: 0x04, value: 0x23 }]);
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 8)?.effects).toEqual([{ effect: 0x0a, value: 0xf1 }]);
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 16)?.effects).toEqual([{ effect: 0x12, value: 2 }]);
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 24)).toBeUndefined();
+    expect(common.warnings).toContain("Effect phaseReset is parsed but not converted in this minimal .fur export.");
+  });
 });
 
 function fixturePatterns() {

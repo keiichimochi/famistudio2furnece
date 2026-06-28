@@ -66,7 +66,11 @@ const channelMap: Record<string, CommonChannel["target"] | undefined> = {
   Noise: "GB Noise"
 };
 const FMS_NOTE_TO_FURNACE_OFFSET = 71;
+const FURNACE_EFFECT_VIBRATO = 0x04;
+const FURNACE_EFFECT_VOLUME_SLIDE = 0x0a;
+const FURNACE_EFFECT_DUTY = 0x12;
 const FURNACE_EFFECT_PITCH = 0xe5;
+const CONVERTED_EFFECTS = new Set(["volume", "finePitch", "vibrato", "volumeSlide", "dutyCycle"]);
 
 export type FmsToCommonOptions = {
   /**
@@ -282,7 +286,7 @@ function mapNote(
   const row = Math.max(0, Math.round(note.time / rowScale));
   const volume = typeof note.effects.volume === "number" ? Math.max(0, Math.min(15, note.effects.volume)) : undefined;
   const effects = mapEffects(note.effects);
-  const unsupportedEffects = Object.keys(note.effects).filter((effect) => effect !== "volume" && effect !== "finePitch");
+  const unsupportedEffects = Object.keys(note.effects).filter((effect) => !CONVERTED_EFFECTS.has(effect));
   for (const effect of unsupportedEffects) {
     addWarning(warnings, `Effect ${effect} is parsed but not converted in this minimal .fur export.`);
   }
@@ -315,6 +319,15 @@ function mapEffects(effects: FmsNote["effects"]): CommonEffect[] {
   if (typeof effects.finePitch === "number") {
     const value = Math.max(0, Math.min(255, 0x80 + effects.finePitch * 2));
     mapped.push({ effect: FURNACE_EFFECT_PITCH, value });
+  }
+  if (typeof effects.vibrato === "number") {
+    mapped.push({ effect: FURNACE_EFFECT_VIBRATO, value: Math.max(0, Math.min(255, effects.vibrato)) });
+  }
+  if (typeof effects.volumeSlide === "number") {
+    mapped.push({ effect: FURNACE_EFFECT_VOLUME_SLIDE, value: Math.max(0, Math.min(255, effects.volumeSlide)) });
+  }
+  if (typeof effects.dutyCycle === "number") {
+    mapped.push({ effect: FURNACE_EFFECT_DUTY, value: Math.max(0, Math.min(3, effects.dutyCycle)) });
   }
   return mapped;
 }
