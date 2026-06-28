@@ -190,10 +190,15 @@ function writePattern(w: BinaryWriter, patternLength: number, ref: PatternRef): 
       if (row.note !== undefined) mask |= 1;
       if (row.instrument !== undefined) mask |= 2;
       if (row.volume !== undefined) mask |= 4;
+      const effect = row.effects?.[0];
+      if (effect?.effect !== undefined) mask |= 8;
+      if (effect?.value !== undefined) mask |= 16;
       w.u8(mask);
       if (row.note !== undefined) w.u8(row.note);
       if (row.instrument !== undefined) w.u8(row.instrument);
       if (row.volume !== undefined) w.u8(row.volume);
+      if (effect?.effect !== undefined) w.u8(effect.effect);
+      if (effect?.value !== undefined) w.u8(effect.value);
     }
     flushEmpty();
     w.u8(0xff);
@@ -219,6 +224,7 @@ function buildRowsWithNoteOffs(rows: CommonPattern["rows"], patternLength: numbe
       note: 180,
       instrument: existing?.instrument,
       volume: existing?.volume,
+      effects: existing?.effects,
       source: row.source
     };
     result.set(endRow, existing ? mergeRow(existing, noteOff) : noteOff);
@@ -236,6 +242,7 @@ function mergeRow(
     instrument: next.instrument ?? base.instrument,
     duration: next.duration ?? base.duration,
     volume: next.volume ?? base.volume,
+    effects: next.effects?.length ? next.effects : base.effects,
     source: next.source
   };
 }

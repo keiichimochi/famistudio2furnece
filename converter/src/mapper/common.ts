@@ -6,7 +6,13 @@ export type CommonNote = {
   instrument?: number;
   duration?: number;
   volume?: number;
+  effects?: CommonEffect[];
   source: FmsNote;
+};
+
+export type CommonEffect = {
+  effect: number;
+  value: number;
 };
 
 export type CommonPattern = {
@@ -60,6 +66,7 @@ const channelMap: Record<string, CommonChannel["target"] | undefined> = {
   Noise: "GB Noise"
 };
 const FMS_NOTE_TO_FURNACE_OFFSET = 71;
+const FURNACE_EFFECT_PITCH = 0xe5;
 
 export type FmsToCommonOptions = {
   /**
@@ -274,13 +281,14 @@ function mapNote(
 ): CommonNote | null {
   const row = Math.max(0, Math.round(note.time / rowScale));
   const volume = typeof note.effects.volume === "number" ? Math.max(0, Math.min(15, note.effects.volume)) : undefined;
-  const unsupportedEffects = Object.keys(note.effects).filter((effect) => effect !== "volume");
+  const effects = mapEffects(note.effects);
+  const unsupportedEffects = Object.keys(note.effects).filter((effect) => effect !== "volume" && effect !== "finePitch");
   for (const effect of unsupportedEffects) {
     addWarning(warnings, `Effect ${effect} is parsed but not converted in this minimal .fur export.`);
   }
 
   if (note.value === 0xff) {
-    return volume === undefined ? null : { row, volume, source: note };
+    return volume === undefined && effects.length === 0 ? null : { row, volume, effects, source: note };
   }
 
   let mappedNote: number;
@@ -299,7 +307,16 @@ function mapNote(
 
   const duration =
     note.duration && note.duration > 0 ? Math.max(1, Math.round((note.time + note.duration) / rowScale) - row) : undefined;
-  return { row, note: mappedNote, instrument, duration, volume, source: note };
+  return { row, note: mappedNote, instrument, duration, volume, effects, source: note };
+}
+
+function mapEffects(effects: FmsNote["effects"]): CommonEffect[] {
+  const mapped: CommonEffect[] = [];
+  if (typeof effects.finePitch === "number") {
+    const value = Math.max(0, Math.min(255, 0x80 + effects.finePitch * 2));
+    mapped.push({ effect: FURNACE_EFFECT_PITCH, value });
+  }
+  return mapped;
 }
 
 function mergeRows(rows: CommonNote[]): CommonNote[] {
@@ -322,6 +339,7 @@ function mergeRow(base: CommonNote, next: CommonNote): CommonNote {
     instrument: next.instrument ?? base.instrument,
     duration: next.duration ?? base.duration,
     volume: next.volume ?? base.volume,
+    effects: next.effects?.length ? next.effects : base.effects,
     source: next.source
   };
 }

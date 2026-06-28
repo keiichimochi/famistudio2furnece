@@ -211,6 +211,64 @@ describe("Furnace 0.6.8.x parser", () => {
     expect(common.song.channels[0]?.patterns[0]?.rows.find((row) => row.row === 130)).toMatchObject({ volume: 7 });
     expect(parsed.patterns[0]?.rows.find((row) => row.row === 130)).toEqual({ row: 130, volume: 7, effects: [] });
   });
+
+  it("writes FamiStudio FinePitch rows as Furnace pitch effects", () => {
+    const common = fmsToCommonProject({
+      format: "text-fms",
+      name: "FinePitch Fixture",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 0, name: "Lead", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Song",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 64,
+            beatLength: 4,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 0,
+              name: "Square1",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "P0",
+                  channel: "Square1",
+                  notes: [
+                    { time: 0, value: 49, flags: 0, slide: 0, instrumentId: 0, duration: 16, effectMask: 0, effects: { volume: 9, finePitch: -1 } },
+                    { time: 8, value: 0xff, flags: 0, slide: 0, effectMask: 0, effects: { finePitch: 0 } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const parsed = readFurBuffer(writeFur068FromCommon(common));
+
+    expect(parsed.info.effectColumns).toEqual([1, 1, 1, 1]);
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 0)).toMatchObject({
+      note: 120,
+      volume: 9,
+      effects: [{ effect: 0xe5, value: 0x7e }]
+    });
+    expect(parsed.patterns[0]?.rows.find((row) => row.row === 8)).toEqual({
+      row: 8,
+      effects: [{ effect: 0xe5, value: 0x80 }]
+    });
+  });
 });
 
 function fixturePatterns() {
