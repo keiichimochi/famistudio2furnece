@@ -1,0 +1,28 @@
+{
+  "name": "fms2fur",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "fms2fur": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "pako": "^2.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pako": "^2.0.4",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
