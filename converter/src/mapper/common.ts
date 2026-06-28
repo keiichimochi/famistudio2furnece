@@ -3,7 +3,8 @@ import type { FmsChannel, FmsInstrument, FmsNote, FmsPattern, FmsProject, FmsSon
 export type CommonNote = {
   row: number;
   note: number;
-  instrument: number;
+  instrument?: number;
+  duration?: number;
   volume?: number;
   source: FmsNote;
 };
@@ -81,12 +82,19 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
       author: project.author ?? "",
       patternLength: Math.min(song.tempo.patternLength || 64, 256),
       ordersLength: song.length,
-      speed: Math.max(1, song.tempo.groove[0] ?? song.tempo.noteLength ?? song.tempo.famitrackerSpeed ?? 6),
+      speed: mapFamiStudioSpeed(song),
       tempo: song.tempo.famitrackerTempo || 150,
       channels
     },
     warnings
   };
+}
+
+function mapFamiStudioSpeed(song: FmsSong): number {
+  const base = Math.max(1, song.tempo.groove[0] ?? song.tempo.noteLength ?? song.tempo.famitrackerSpeed ?? 6);
+  if (song.tempo.mode !== "FamiStudio" || !song.tempo.noteLength) return base;
+  const beatScale = Math.max(1, Math.round(song.tempo.beatLength / song.tempo.noteLength));
+  return Math.min(255, base * beatScale);
 }
 
 function buildInstruments(instruments: FmsInstrument[]): CommonInstrument[] {
@@ -164,7 +172,8 @@ function mapNote(note: FmsNote, instrumentById: Map<number, number>, warnings: s
     addWarning(warnings, `Effect ${effect} is parsed but not converted in this minimal .fur export.`);
   }
 
-  return { row: note.time, note: mappedNote, instrument, volume, source: note };
+  const duration = note.duration && note.duration > 0 ? note.duration : undefined;
+  return { row: note.time, note: mappedNote, instrument, duration, volume, source: note };
 }
 
 function addWarning(warnings: string[], warning: string): void {

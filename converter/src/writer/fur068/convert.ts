@@ -150,7 +150,7 @@ function writePattern(w: BinaryWriter, patternLength: number, ref: PatternRef): 
     w.u8(ref.channel);
     w.u16(ref.pattern.index);
     w.string(ref.pattern.name);
-    const rows = new Map(ref.pattern.rows.map((row) => [row.row, row]));
+    const rows = buildRowsWithNoteOffs(ref.pattern.rows, Math.min(patternLength, 256));
     let emptyRows = 0;
     const flushEmpty = () => {
       while (emptyRows > 0) {
@@ -173,16 +173,40 @@ function writePattern(w: BinaryWriter, patternLength: number, ref: PatternRef): 
       flushEmpty();
       let mask = 0;
       if (row.note !== undefined) mask |= 1;
-      mask |= 2;
+      if (row.instrument !== undefined) mask |= 2;
       if (row.volume !== undefined) mask |= 4;
       w.u8(mask);
       if (row.note !== undefined) w.u8(row.note);
-      w.u8(0);
+      if (row.instrument !== undefined) w.u8(row.instrument);
       if (row.volume !== undefined) w.u8(row.volume);
     }
     flushEmpty();
     w.u8(0xff);
   });
+}
+
+function buildRowsWithNoteOffs(rows: CommonPattern["rows"], patternLength: number): Map<number, CommonPattern["rows"][number]> {
+  const result = new Map<number, CommonPattern["rows"][number]>();
+  const musicalRows = new Set<number>();
+  for (const row of rows) {
+    result.set(row.row, row);
+    if (row.note >= 0 && row.note < 180) musicalRows.add(row.row);
+  }
+  for (const row of rows) {
+    if (row.duration === undefined || row.note >= 180) continue;
+    const endRow = row.row + row.duration;
+    if (endRow <= row.row || endRow >= patternLength) continue;
+    if (musicalRows.has(endRow)) continue;
+    const existing = result.get(endRow);
+    result.set(endRow, {
+      row: endRow,
+      note: 180,
+      instrument: existing?.instrument,
+      volume: existing?.volume,
+      source: row.source
+    });
+  }
+  return result;
 }
 
 function writeFeature(w: BinaryWriter, code: string, body: () => void): void {

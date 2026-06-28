@@ -163,11 +163,12 @@ function writePattern(w: BinaryWriter, patternLength: number, channelIndex: numb
         continue;
       }
       flushEmpty();
-      let mask = 0x01 | 0x02;
+      let mask = 0x01;
+      if (note.instrument !== undefined) mask |= 0x02;
       if (note.volume !== undefined) mask |= 0x04;
       w.u8(mask);
       w.u8(note.note);
-      w.u8(note.instrument);
+      if (note.instrument !== undefined) w.u8(note.instrument);
       if (note.volume !== undefined) w.u8(note.volume);
     }
     flushEmpty();

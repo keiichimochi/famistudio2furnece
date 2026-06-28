@@ -56,7 +56,7 @@ describe("Furnace 0.6.8.x parser", () => {
             source: "Square1",
             target: "GB Square1",
             order: [0],
-            patterns: [{ index: 0, name: "P0", rows: [{ row: 0, note: 108, instrument: 0, source: { time: 0, value: 49, flags: 0, slide: 0, effectMask: 0, effects: {} } }] }]
+            patterns: [{ index: 0, name: "P0", rows: [{ row: 0, note: 108, instrument: 0, duration: 4, source: { time: 0, value: 49, flags: 0, slide: 0, duration: 4, effectMask: 0, effects: {} } }] }]
           },
           { source: "Square2", target: "GB Square2", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] },
           { source: "Triangle", target: "GB Wave", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] },
@@ -72,5 +72,6 @@ describe("Furnace 0.6.8.x parser", () => {
     expect(parsed.info.instrumentCount).toBe(1);
     expect(parsed.info.patternCount).toBe(4);
     expect(parsed.patterns[0]?.rows[0]).toMatchObject({ row: 0, note: 108, instrument: 0 });
+    expect(parsed.patterns[0]?.rows[1]).toMatchObject({ row: 4, note: 180 });
   });
 });
