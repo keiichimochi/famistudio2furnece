@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "bin": {
-    "fms2fur": "./dist/cli.js"
+    "fms2fur": "./dist/cli.js",
+    "furdump": "./dist/tools/furdump.js",
+    "furdiff": "./dist/tools/furdiff.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
