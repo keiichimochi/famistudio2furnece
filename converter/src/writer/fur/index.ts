@@ -1,7 +1,7 @@
 import type { CommonChannel, CommonPattern, CommonProject } from "../../mapper/common.js";
 import { BinaryWriter } from "./binaryWriter.js";
 
-const FURNACE_VERSION = 240;
+const FURNACE_VERSION = 249;
 const CHANNELS = ["GB Square1", "GB Square2", "GB Wave", "GB Noise"] as const;
 
 export function writeFur(project: CommonProject): Buffer {
