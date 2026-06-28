@@ -365,7 +365,11 @@ describe("FMS Reader", () => {
                   id: 1,
                   name: "N1",
                   channel: "Noise",
-                  notes: [{ time: 6, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 4 } }]
+                  notes: [
+                    { time: 0, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 9 } },
+                    { time: 5, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 1 } },
+                    { time: 6, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 4 } }
+                  ]
                 }
               ]
             }
@@ -375,6 +379,8 @@ describe("FMS Reader", () => {
     });
     const nextPattern = common.song.channels[0]?.patterns[1];
 
+    expect(nextPattern?.rows.find((row) => row.row === 0)).toMatchObject({ note: 107, volume: 9 });
+    expect(nextPattern?.rows.find((row) => row.row === 5)).toMatchObject({ note: 107, volume: 1 });
     expect(nextPattern?.rows.find((row) => row.row === 6)).toMatchObject({ note: 180, volume: 4 });
   });
 
@@ -392,6 +398,8 @@ describe("FMS Reader", () => {
     expect(noisePattern0?.rows.length).toBeGreaterThan(0);
     expect(noisePattern0?.rows.some((row) => row.row >= 194)).toBe(true);
     expect(sequence08Pattern?.rows.find((row) => row.row === 254)).toMatchObject({ note: 107, duration: 8 });
+    expect(sequence09Pattern?.rows.find((row) => row.row === 0)).toMatchObject({ note: 107, volume: 9 });
+    expect(sequence09Pattern?.rows.find((row) => row.row === 5)).toMatchObject({ note: 107, volume: 1 });
     expect(sequence09Pattern?.rows.find((row) => row.row === 6)).toMatchObject({ note: 180 });
   });
 

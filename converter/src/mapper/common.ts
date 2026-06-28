@@ -198,6 +198,10 @@ function addCrossPatternNoteOffs(channel: CommonChannel, patternLength: number):
       const targetOrderIndex = Math.floor(absoluteEnd / patternLength);
       if (targetOrderIndex <= orderIndex || targetOrderIndex >= channel.order.length) continue;
 
+      if (channel.target === "GB Noise") {
+        addCrossPatternNoiseContinuation(channel, orderIndex + 1, targetOrderIndex, absoluteEnd, patternLength, row);
+      }
+
       const targetRow = absoluteEnd % patternLength;
       const targetPattern = channel.patterns[channel.order[targetOrderIndex] ?? 0];
       if (!targetPattern) continue;
@@ -211,6 +215,32 @@ function addCrossPatternNoteOffs(channel: CommonChannel, patternLength: number):
         targetPattern.rows.push(noteOff);
         targetPattern.rows.sort((a, b) => a.row - b.row);
       }
+    }
+  }
+}
+
+function addCrossPatternNoiseContinuation(
+  channel: CommonChannel,
+  startOrderIndex: number,
+  endOrderIndex: number,
+  absoluteEnd: number,
+  patternLength: number,
+  sourceRow: CommonNote
+): void {
+  for (let orderIndex = startOrderIndex; orderIndex <= endOrderIndex; orderIndex++) {
+    const pattern = channel.patterns[channel.order[orderIndex] ?? 0];
+    if (!pattern) continue;
+    const endRow = orderIndex === endOrderIndex ? absoluteEnd % patternLength : patternLength;
+
+    for (let rowIndex = 0; rowIndex < pattern.rows.length; rowIndex++) {
+      const row = pattern.rows[rowIndex];
+      if (row.row >= endRow || row.note !== undefined || row.volume === undefined) continue;
+      pattern.rows[rowIndex] = mergeRow(row, {
+        row: row.row,
+        note: sourceRow.note,
+        instrument: sourceRow.instrument,
+        source: sourceRow.source
+      });
     }
   }
 }
