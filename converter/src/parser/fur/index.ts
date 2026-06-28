@@ -4,7 +4,7 @@ import { FurBinaryReader } from "./binaryReader.js";
 import type { FurInfoSummary, FurInstrumentSummary, FurModuleSummary, FurPatternSummary } from "./types.js";
 
 const MAGIC = "-Furnace module-";
-const TARGET_VERSION = 228;
+const TARGET_VERSION = 232;
 const CHIP_CHANNELS = new Map<number, number>([
   [0x03, 4],
   [0x04, 4],
@@ -140,7 +140,7 @@ function readInfo(reader: FurBinaryReader, version: number, warnings: string[]):
   for (let i = 0; i < channelCount; i++) reader.string();
   reader.string(); // song comment
   reader.f32(); // master volume
-  reader.skip(29); // extended compatibility flags through >=130
+  reader.skip(28); // extended compatibility flags through >=130
   reader.u16(); // virtual tempo numerator
   reader.u16(); // virtual tempo denominator
   reader.string(); // first subsong name
