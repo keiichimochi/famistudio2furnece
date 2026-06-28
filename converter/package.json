@@ -6,7 +6,8 @@
   "bin": {
     "fms2fur": "./dist/cli.js",
     "furdump": "./dist/tools/furdump.js",
-    "furdiff": "./dist/tools/furdiff.js"
+    "furdiff": "./dist/tools/furdiff.js",
+    "furroundtrip": "./dist/tools/furroundtrip.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

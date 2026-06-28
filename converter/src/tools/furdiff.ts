@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { Command } from "commander";
+import { normalizeFurData } from "../parser/fur/index.js";
 
 const program = new Command();
 
@@ -9,10 +10,12 @@ program
   .argument("<expected>", "expected .fur file")
   .argument("<actual>", "actual .fur file")
   .option("-l, --limit <count>", "maximum differences to print", "32")
+  .option("--inflate", "compare normalized uncompressed Furnace data")
   .action(async (expectedPath: string, actualPath: string, options: { limit: string }) => {
-    const expected = await readFile(expectedPath);
-    const actual = await readFile(actualPath);
-    const limit = Number.parseInt(options.limit, 10);
+    const opts = options as { limit: string; inflate?: boolean };
+    const expected = opts.inflate ? normalizeFurData(await readFile(expectedPath)) : await readFile(expectedPath);
+    const actual = opts.inflate ? normalizeFurData(await readFile(actualPath)) : await readFile(actualPath);
+    const limit = Number.parseInt(opts.limit, 10);
     let count = 0;
     const max = Math.max(expected.length, actual.length);
     for (let offset = 0; offset < max; offset++) {

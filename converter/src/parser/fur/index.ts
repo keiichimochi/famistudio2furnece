@@ -31,6 +31,16 @@ export async function readFurFile(path: string): Promise<FurModuleSummary> {
   return readFurBuffer(await readFile(path));
 }
 
+export async function readFurDocument(path: string): Promise<{ module: FurModuleSummary; data: Buffer; compressed: boolean }> {
+  const input = await readFile(path);
+  const normalized = normalizeFurBuffer(input);
+  return {
+    module: readFurBuffer(input),
+    data: normalized,
+    compressed: normalized !== input
+  };
+}
+
 export function readFurBuffer(input: Buffer): FurModuleSummary {
   const buffer = normalizeFurBuffer(input);
   const reader = new FurBinaryReader(buffer);
@@ -99,6 +109,10 @@ function normalizeFurBuffer(input: Buffer): Buffer {
     // Not zlib-compressed.
   }
   return input;
+}
+
+export function normalizeFurData(input: Buffer): Buffer {
+  return normalizeFurBuffer(input);
 }
 
 function readInfo(reader: FurBinaryReader, version: number, warnings: string[]): FurInfoSummary {
