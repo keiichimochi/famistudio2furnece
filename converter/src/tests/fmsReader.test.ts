@@ -268,6 +268,61 @@ describe("FMS Reader", () => {
       { row: 0, duration: 4 },
       { row: 4, duration: 4 }
     ]);
+    expect(common.song.channels[0]?.patterns[0]?.rows.map((row) => row.note)).toEqual([101, 102]);
+  });
+
+  it("repeats the last noise note on effect-only volume rows", () => {
+    const common = fmsToCommonProject({
+      format: "binary-fms",
+      name: "Noise Fixture",
+      author: "Codex",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 1, name: "Noise", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Battle",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 256,
+            beatLength: 32,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 3,
+              name: "Noise",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "N0",
+                  channel: "Noise",
+                  notes: [
+                    { time: 194, value: 38, flags: 0, slide: 0, instrumentId: 1, duration: 4, effectMask: 1, effects: { volume: 12 } },
+                    { time: 195, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 9 } },
+                    { time: 196, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 7 } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(common.song.channels[0]?.patterns[0]?.rows.map((row) => ({ row: row.row, note: row.note, duration: row.duration, volume: row.volume }))).toEqual([
+      { row: 194, note: 109, duration: 4, volume: 12 },
+      { row: 195, note: 109, duration: 1, volume: 9 },
+      { row: 196, note: 109, duration: 1, volume: 7 }
+    ]);
   });
 
   it("keeps late Noise effect-only events in the FF3 battle sample when available", async () => {

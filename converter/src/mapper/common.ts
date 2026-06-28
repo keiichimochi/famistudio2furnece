@@ -53,6 +53,7 @@ const channelMap: Record<string, CommonChannel["target"] | undefined> = {
   Triangle: "GB Wave",
   Noise: "GB Noise"
 };
+const FMS_NOTE_TO_FURNACE_OFFSET = 71;
 
 export type FmsToCommonOptions = {
   /**
@@ -146,7 +147,7 @@ function mapChannel(
       if (patternId === null) return 0;
       return patternIndexById.get(patternId) ?? 0;
     }),
-    patterns: channel.patterns.map((pattern, index) => mapPattern(pattern, index, instrumentById, warnings, rowScale))
+    patterns: channel.patterns.map((pattern, index) => mapPattern(pattern, index, instrumentById, warnings, rowScale, target))
   };
 }
 
@@ -155,16 +156,31 @@ function mapPattern(
   index: number,
   instrumentById: Map<number, number>,
   warnings: string[],
-  rowScale: number
+  rowScale: number,
+  target: CommonChannel["target"]
 ): CommonPattern {
+  const rows: CommonNote[] = [];
+  let lastNoiseNote: Pick<CommonNote, "note" | "instrument"> | undefined;
+
+  for (const fmsNote of pattern.notes) {
+    const row = mapNote(fmsNote, instrumentById, warnings, rowScale);
+    if (!row) continue;
+    if (target === "GB Noise" && row.note !== undefined && row.note < 180) {
+      lastNoiseNote = { note: row.note, instrument: row.instrument };
+    } else if (target === "GB Noise" && row.note !== undefined) {
+      lastNoiseNote = undefined;
+    } else if (target === "GB Noise" && row.volume !== undefined && lastNoiseNote) {
+      row.note = lastNoiseNote.note;
+      row.instrument = lastNoiseNote.instrument;
+      row.duration = 1;
+    }
+    rows.push(row);
+  }
+
   return {
     index,
     name: pattern.name || `Pattern ${index}`,
-    rows: mergeRows(
-      pattern.notes
-        .map((note) => mapNote(note, instrumentById, warnings, rowScale))
-        .filter((note): note is CommonNote => note !== null)
-    )
+    rows: mergeRows(rows)
   };
 }
 
@@ -191,7 +207,7 @@ function mapNote(
   } else if (note.value === 0x80) {
     mappedNote = 181;
   } else if (note.value >= 1 && note.value <= 0x60) {
-    mappedNote = note.value + 59;
+    mappedNote = note.value + FMS_NOTE_TO_FURNACE_OFFSET;
   } else {
     warnings.push(`Unsupported FamiStudio note value ${note.value} at row ${note.time}; skipped.`);
     return null;
