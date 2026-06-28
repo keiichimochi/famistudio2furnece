@@ -143,19 +143,29 @@ function mapChannel(
     return null;
   }
 
+  const hasEmptyOrderSlot = channel.order.some((patternId) => patternId === null);
+  const patternIndexOffset = hasEmptyOrderSlot ? 1 : 0;
   const patternIndexById = new Map<number, number>();
   channel.patterns.forEach((pattern, index) => {
-    if (pattern.id !== undefined) patternIndexById.set(pattern.id, index);
+    if (pattern.id !== undefined) patternIndexById.set(pattern.id, index + patternIndexOffset);
+  });
+
+  const patterns = channel.patterns.map((pattern, index) =>
+    mapPattern(pattern, index + patternIndexOffset, instrumentById, warnings, rowScale, target)
+  );
+  if (hasEmptyOrderSlot) {
+    patterns.unshift({ index: 0, name: "Empty", rows: [] });
+  }
+  const order = channel.order.map((patternId) => {
+    if (patternId === null) return 0;
+    return patternIndexById.get(patternId) ?? 0;
   });
 
   const commonChannel: CommonChannel = {
     source: channel.name,
     target,
-    order: channel.order.map((patternId) => {
-      if (patternId === null) return 0;
-      return patternIndexById.get(patternId) ?? 0;
-    }),
-    patterns: channel.patterns.map((pattern, index) => mapPattern(pattern, index, instrumentById, warnings, rowScale, target))
+    order,
+    patterns
   };
   addCrossPatternNoteOffs(commonChannel, patternLength);
   return commonChannel;

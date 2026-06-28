@@ -251,6 +251,27 @@ describe("FMS Reader", () => {
     expect(common.song.channels[0]?.patterns[1]?.rows[0]).toMatchObject({ row: 0, volume: 7 });
   });
 
+  it("keeps missing text PatternInstance slots silent instead of repeating pattern 0", () => {
+    const project = readTextFms(`Project Version="4.5.1" TempoMode="FamiStudio" Name="Late Triangle"
+\tInstrument Name="Triangle"
+\tSong Name="Song 1" Length="3" LoopPoint="0" PatternLength="32" BeatLength="4" NoteLength="8" Groove="8"
+\t\tChannel Type="Triangle"
+\t\t\tPattern Name="Pattern 1"
+\t\t\t\tNote Time="0" Value="C3" Duration="8" Instrument="Triangle"
+\t\t\tPattern Name="Pattern 2"
+\t\t\t\tNote Time="0" Value="D3" Duration="8" Instrument="Triangle"
+\t\t\tPatternInstance Time="1" Pattern="Pattern 1"
+\t\t\tPatternInstance Time="2" Pattern="Pattern 2"`);
+
+    const common = fmsToCommonProject(project);
+    const triangle = common.song.channels[0];
+
+    expect(project.songs[0]?.channels[0]?.order).toEqual([null, 0, 1]);
+    expect(triangle?.order).toEqual([0, 1, 2]);
+    expect(triangle?.patterns[0]).toEqual({ index: 0, name: "Empty", rows: [] });
+    expect(triangle?.patterns[1]?.rows[0]).toMatchObject({ row: 0, note: 108 });
+  });
+
   it("keeps fixture files present for FF3-oriented golden replacement", async () => {
     await expect(readFile(join(root, "fixtures", "battle.fms"))).resolves.toBeInstanceOf(Buffer);
     await expect(readFile(join(root, "fixtures", "town.fms"))).resolves.toBeInstanceOf(Buffer);
