@@ -3,7 +3,7 @@ import { dirname, join, parse } from "node:path";
 import { writeFile } from "node:fs/promises";
 import { Command } from "commander";
 import { fmsToCommonProject } from "./mapper/common.js";
-import { writeNsfFurFiles } from "./nsfConvert.js";
+import { writeNsfProjectFiles } from "./nsfConvert.js";
 import { inspectProject, readFmsFile } from "./parser/fms/index.js";
 import { formatNsfTrackList, readNsfFile } from "./parser/nsf/index.js";
 import { startUiServer } from "./uiServer.js";
@@ -50,21 +50,23 @@ program
 program
   .command("nsf-convert")
   .argument("<file>", "NES Sound Format .nsf file")
-  .option("-o, --out-dir <dir>", "output directory", ".")
+  .option("-o, --out-dir <dir>", "output root directory", "out")
   .option("-w, --wavetable <file>", "Furnace .fuw wavetable to embed")
   .option("--famistudio <file>", "FamiStudio CLI executable")
   .option("--duration <sec>", "NSF capture duration in seconds", (value) => Number.parseInt(value, 10), 120)
   .option("--pattern-length <rows>", "FamiStudio NSF import pattern length", (value) => Number.parseInt(value, 10), 256)
-  .description("Create one Furnace 0.6.8.3 .fur shell per NSF song")
+  .description("Create one FamiStudio text file and Furnace 0.6.8.3 .fur per NSF song")
   .action(async (file: string, options: { outDir: string; wavetable?: string; famistudio?: string; duration: number; patternLength: number }) => {
-    const files = await writeNsfFurFiles(file, options.outDir, {
+    const document = await readNsfFile(file);
+    const result = await writeNsfProjectFiles(document, file, options.outDir, {
       wavetable: options.wavetable,
       famistudio: options.famistudio,
       duration: options.duration,
       patternLength: options.patternLength
     });
-    for (const output of files) process.stdout.write(`Wrote ${join(options.outDir, output.name)}\n`);
-    const warnings = new Set(files.flatMap((output) => output.warnings));
+    process.stdout.write(`Output directory: ${result.outputDir}\n`);
+    for (const output of result.files) process.stdout.write(`Wrote ${output.fms}\nWrote ${output.fur}\n`);
+    const warnings = new Set(result.files.flatMap((output) => output.warnings));
     if (warnings.size > 0) process.stderr.write(`Warnings:\n${[...warnings].map((warning) => `- ${warning}`).join("\n")}\n`);
   });
 
@@ -82,7 +84,8 @@ program
       wavetable: options.wavetable,
       famistudio: options.famistudio,
       duration: options.duration,
-      patternLength: options.patternLength
+      patternLength: options.patternLength,
+      outputRoot: join(import.meta.dirname, "..", "out")
     });
   });
 

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
-import { convertNsfBufferToFurFiles } from "./nsfConvert.js";
+import { extname, join } from "node:path";
+import { writeNsfBufferProjectFiles } from "./nsfConvert.js";
 import { readNsfBuffer } from "./parser/nsf/index.js";
 
 export type UiServerOptions = {
@@ -10,6 +10,7 @@ export type UiServerOptions = {
   famistudio?: string;
   duration?: number;
   patternLength?: number;
+  outputRoot?: string;
 };
 
 export function startUiServer(options: UiServerOptions): void {
@@ -44,20 +45,17 @@ async function route(request: IncomingMessage, response: ServerResponse, options
   if (request.method === "POST" && url.pathname === "/api/convert") {
     const fileName = url.searchParams.get("name") ?? "upload.nsf";
     const body = await readBody(request);
-    const result = await convertNsfBufferToFurFiles(body, fileName, {
+    const output = await writeNsfBufferProjectFiles(body, fileName, options.outputRoot ?? join(process.cwd(), "out"), {
       wavetable: options.wavetable,
       famistudio: options.famistudio,
       duration: options.duration,
       patternLength: options.patternLength
     });
     sendJson(response, 200, {
-      header: result.document.header,
-      tracks: result.document.tracks,
-      files: result.files.map((file) => ({
-        name: file.name,
-        data: file.data.toString("base64"),
-        warnings: file.warnings
-      }))
+      header: output.document.header,
+      tracks: output.document.tracks,
+      outputDir: output.result.outputDir,
+      files: output.result.files
     });
     return;
   }
@@ -178,8 +176,7 @@ const INDEX_HTML = String.raw`<!doctype html>
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "convert failed");
-        await saveFiles(result.files);
-        status.textContent = result.files.length + " file(s) written.";
+        status.textContent = result.files.length + " track(s) written to:\n" + result.outputDir;
       } catch (error) {
         status.textContent = "変換エラー: " + (error && error.message ? error.message : String(error));
       }
@@ -205,35 +202,6 @@ const INDEX_HTML = String.raw`<!doctype html>
       convert.disabled = false;
       status.textContent = "";
     }
-
-    async function saveFiles(files) {
-      if ("showDirectoryPicker" in window) {
-        const dir = await window.showDirectoryPicker({ mode: "readwrite" });
-        for (const file of files) {
-          const handle = await dir.getFileHandle(file.name, { create: true });
-          const writable = await handle.createWritable();
-          await writable.write(base64ToBytes(file.data));
-          await writable.close();
-        }
-        return;
-      }
-      for (const file of files) {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([base64ToBytes(file.data)], { type: "application/octet-stream" }));
-        a.download = file.name;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        await new Promise(resolve => setTimeout(resolve, 250));
-      }
-    }
-
-    function base64ToBytes(value) {
-      const binary = atob(value);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes;
-    }
-
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[ch]));
     }

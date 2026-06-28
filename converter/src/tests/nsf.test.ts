@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { convertNsfBufferToFurFiles } from "../nsfConvert.js";
+import { convertNsfBufferToFurFiles, writeNsfBufferProjectFiles } from "../nsfConvert.js";
 import { readFuwBuffer } from "../parser/fur/wavetable.js";
 import { readNsfBuffer } from "../parser/nsf/index.js";
 import { readFurBuffer } from "../parser/fur/index.js";
-import { chmod, copyFile, writeFile, mkdtemp } from "node:fs/promises";
+import { chmod, copyFile, readFile, stat, writeFile, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -35,6 +35,21 @@ describe("NSF batch conversion", () => {
     expect(parsed.info.wavetableCount).toBe(1);
     expect(parsed.info.wavetablePointers[0]).toBeGreaterThan(0);
     expect(readFuwBuffer(wavetable)[0]?.block.subarray(0, 4).toString("ascii")).toBe("WAVE");
+  });
+
+  it("writes FamiStudio text and Furnace files into an NSF-named folder", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fms2fur-out-"));
+    const fakeFamiStudioPath = await createFakeFamiStudio(dir);
+    const result = await writeNsfBufferProjectFiles(createNsfFixture({ title: "Demo", artist: "Composer", songs: 1 }), "Demo Song.nsf", dir, {
+      famistudio: fakeFamiStudioPath
+    });
+    const written = result.result.files[0]!;
+
+    expect(result.result.outputDir).toBe(join(dir, "Demo_Song"));
+    await expect(stat(written.fms)).resolves.toMatchObject({ isFile: expect.any(Function) });
+    await expect(stat(written.fur)).resolves.toMatchObject({ isFile: expect.any(Function) });
+    await expect(readFile(written.fms, "utf8")).resolves.toContain("Project ");
+    expect(readFurBuffer(await readFile(written.fur)).info.systemName).toBe("Game Boy");
   });
 });
 

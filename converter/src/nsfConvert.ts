@@ -17,6 +17,11 @@ export type ConvertedFurFile = {
   warnings: string[];
 };
 
+export type WrittenNsfConversion = {
+  outputDir: string;
+  files: Array<{ fms: string; fur: string; warnings: string[] }>;
+};
+
 export type NsfConversionOptions = {
   wavetable?: string;
   famistudio?: string;
@@ -52,6 +57,54 @@ export async function writeNsfFurFiles(path: string, outDir: string, options: Ns
     await writeFile(join(outDir, file.name), file.data);
   }
   return files;
+}
+
+export async function writeNsfBufferProjectFiles(
+  buffer: Buffer,
+  fileName: string,
+  outputRoot: string,
+  options: NsfConversionOptions = {}
+): Promise<{ document: NsfDocument; result: WrittenNsfConversion }> {
+  const document = readNsfBuffer(buffer);
+  const tempDir = await mkdtemp(join(tmpdir(), "fms2fur-nsf-"));
+  const inputPath = join(tempDir, basename(fileName) || "upload.nsf");
+  try {
+    await writeFile(inputPath, buffer);
+    return { document, result: await writeNsfProjectFiles(document, inputPath, outputRoot, options) };
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+}
+
+export async function writeNsfProjectFiles(
+  document: NsfDocument,
+  inputPath: string,
+  outputRoot: string,
+  options: NsfConversionOptions = {}
+): Promise<WrittenNsfConversion> {
+  const wavetables = options.wavetable ? await readFuwFile(options.wavetable) : [];
+  const baseName = sanitizeFileName(parse(inputPath).name || document.header.title || "nsf");
+  const outputDir = join(outputRoot, baseName);
+  await mkdir(outputDir, { recursive: true });
+
+  const files: WrittenNsfConversion["files"] = [];
+  for (const track of document.tracks) {
+    const trackName = `${String(track.index + 1).padStart(2, "0")}-${sanitizeFileName(track.name)}`;
+    const textPath = join(outputDir, `${trackName}.fms.txt`);
+    const furPath = join(outputDir, `${trackName}.fur`);
+    await importNsfTrackWithFamiStudio(inputPath, textPath, track, options);
+    const project = await readFmsFile(textPath);
+    const common = fmsToCommonProject(project, 0);
+    common.name = document.header.title || common.name;
+    common.author = document.header.artist || common.author;
+    common.song.name = track.name;
+    common.song.author = document.header.artist || common.song.author;
+    common.wavetables = wavetables.map((wavetable, index) => ({ name: `Triangle ${index + 1}`, block: wavetable.block }));
+    await writeFile(furPath, writeFur068FromCommon(common));
+    files.push({ fms: textPath, fur: furPath, warnings: common.warnings });
+  }
+
+  return { outputDir, files };
 }
 
 async function convertNsfDocumentToFurFiles(
