@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { fmsToCommonProject } from "../mapper/common.js";
 import { inspectProject, readFmsFile } from "../parser/fms/index.js";
+import { writeFur } from "../writer/fur/index.js";
 
 const root = join(import.meta.dirname, "..", "..");
 
@@ -210,5 +212,17 @@ describe("FMS Reader", () => {
     await expect(readFile(join(root, "fixtures", "battle.fms"))).resolves.toBeInstanceOf(Buffer);
     await expect(readFile(join(root, "fixtures", "town.fms"))).resolves.toBeInstanceOf(Buffer);
     await expect(readFile(join(root, "fixtures", "boss.fms"))).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it("writes a minimal uncompressed Furnace module", async () => {
+    const project = await readFmsFile(join(root, "fixtures", "battle.fms"));
+    const common = fmsToCommonProject(project);
+    const fur = writeFur(common);
+
+    expect(fur.subarray(0, 16).toString("ascii")).toBe("-Furnace module-");
+    expect(fur.subarray(32, 36).toString("ascii")).toBe("INF2");
+    expect(fur.includes(Buffer.from("SNG2"))).toBe(true);
+    expect(fur.includes(Buffer.from("INS2"))).toBe(true);
+    expect(fur.includes(Buffer.from("PATN"))).toBe(true);
   });
 });
