@@ -24,6 +24,20 @@ export type FurPatternSummary = {
   patternIndex: number;
   name: string;
   rowsDecoded: number;
+  rows: FurPatternRow[];
+};
+
+export type FurEffectCell = {
+  effect?: number;
+  value?: number;
+};
+
+export type FurPatternRow = {
+  row: number;
+  note?: number;
+  instrument?: number;
+  volume?: number;
+  effects: FurEffectCell[];
 };
 
 export type FurInfoSummary = {

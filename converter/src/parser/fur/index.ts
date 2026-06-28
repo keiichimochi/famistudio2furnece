@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { inflateSync } from "node:zlib";
 import { FurBinaryReader } from "./binaryReader.js";
-import type { FurInfoSummary, FurInstrumentSummary, FurModuleSummary, FurPatternSummary } from "./types.js";
+import type { FurEffectCell, FurInfoSummary, FurInstrumentSummary, FurModuleSummary, FurPatternRow, FurPatternSummary } from "./types.js";
 
 const MAGIC = "-Furnace module-";
 const TARGET_VERSION = 232;
@@ -75,7 +75,7 @@ export function readFurBuffer(input: Buffer): FurModuleSummary {
   };
 }
 
-export function formatFurDump(module: FurModuleSummary): string {
+export function formatFurDump(module: FurModuleSummary, options: { rows?: boolean; rowLimit?: number } = {}): string {
   const lines = [
     `Version : ${module.header.version}`,
     `Info Header : ${module.info.blockId}`,
@@ -105,6 +105,11 @@ export function formatFurDump(module: FurModuleSummary): string {
     for (const pattern of module.patterns) {
       const name = pattern.name ? ` ${pattern.name}` : "";
       lines.push(`- ${pattern.index}: ch=${pattern.channel} pat=${pattern.patternIndex} rows=${pattern.rowsDecoded}${name}`);
+      if (options.rows) {
+        for (const row of pattern.rows.slice(0, options.rowLimit ?? 16)) {
+          lines.push(`  ${formatRow(row)}`);
+        }
+      }
     }
   }
 
@@ -114,6 +119,21 @@ export function formatFurDump(module: FurModuleSummary): string {
   }
 
   return lines.join("\n");
+}
+
+function formatRow(row: FurPatternRow): string {
+  const fields = [`row=${row.row}`];
+  if (row.note !== undefined) fields.push(`note=${row.note}`);
+  if (row.instrument !== undefined) fields.push(`ins=${row.instrument}`);
+  if (row.volume !== undefined) fields.push(`vol=${row.volume}`);
+  if (row.effects.length > 0) {
+    fields.push(
+      `fx=${row.effects
+        .map((effect, index) => `${index}:${effect.effect ?? ".."}/${effect.value ?? ".."}`)
+        .join(",")}`
+    );
+  }
+  return fields.join(" ");
 }
 
 function normalizeFurBuffer(input: Buffer): Buffer {
@@ -292,7 +312,7 @@ function readPattern(
   const blockId = reader.ascii(4);
   if (blockId !== "PATN") {
     warnings.push(`Pattern ${index} at 0x${pointer.toString(16)} has unexpected block ${blockId}.`);
-    return { index, pointer, blockId, size: 0, subsong: 0, channel: 0, patternIndex: 0, name: "", rowsDecoded: 0 };
+    return { index, pointer, blockId, size: 0, subsong: 0, channel: 0, patternIndex: 0, name: "", rowsDecoded: 0, rows: [] };
   }
   const size = reader.u32();
   const subsong = reader.u8();
@@ -300,6 +320,7 @@ function readPattern(
   const patternIndex = reader.u16();
   const name = version >= 51 ? reader.string() : "";
   let rowsDecoded = 0;
+  const rows: FurPatternRow[] = [];
   while (rowsDecoded < patternLength) {
     const mask = reader.u8();
     if (mask === 0xff) break;
@@ -313,16 +334,31 @@ function readPattern(
     }
     const effectMaskLow = (mask & 0x20) !== 0 ? reader.u8() : 0;
     const effectMaskHigh = (mask & 0x40) !== 0 ? reader.u8() : 0;
-    if ((mask & 0x01) !== 0) reader.u8();
-    if ((mask & 0x02) !== 0) reader.u8();
-    if ((mask & 0x04) !== 0) reader.u8();
-    if ((mask & 0x08) !== 0) reader.u8();
-    if ((mask & 0x10) !== 0) reader.u8();
-    for (const bit of [0x04, 0x08, 0x10, 0x20, 0x40, 0x80]) if ((effectMaskLow & bit) !== 0) reader.u8();
-    for (const bit of [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80]) if ((effectMaskHigh & bit) !== 0) reader.u8();
+    const row: FurPatternRow = { row: rowsDecoded, effects: [] };
+    if ((mask & 0x01) !== 0) row.note = reader.u8();
+    if ((mask & 0x02) !== 0) row.instrument = reader.u8();
+    if ((mask & 0x04) !== 0) row.volume = reader.u8();
+    const fx0: FurEffectCell = {};
+    if ((mask & 0x08) !== 0) fx0.effect = reader.u8();
+    if ((mask & 0x10) !== 0) fx0.value = reader.u8();
+    if (fx0.effect !== undefined || fx0.value !== undefined) row.effects[0] = fx0;
+    for (let i = 1; i <= 3; i++) {
+      const effect: FurEffectCell = {};
+      if ((effectMaskLow & (1 << (i * 2))) !== 0) effect.effect = reader.u8();
+      if ((effectMaskLow & (1 << (i * 2 + 1))) !== 0) effect.value = reader.u8();
+      if (effect.effect !== undefined || effect.value !== undefined) row.effects[i] = effect;
+    }
+    for (let i = 4; i <= 7; i++) {
+      const local = i - 4;
+      const effect: FurEffectCell = {};
+      if ((effectMaskHigh & (1 << (local * 2))) !== 0) effect.effect = reader.u8();
+      if ((effectMaskHigh & (1 << (local * 2 + 1))) !== 0) effect.value = reader.u8();
+      if (effect.effect !== undefined || effect.value !== undefined) row.effects[i] = effect;
+    }
+    rows.push(row);
     rowsDecoded++;
   }
-  return { index, pointer, blockId, size, subsong, channel, patternIndex, name, rowsDecoded };
+  return { index, pointer, blockId, size, subsong, channel, patternIndex, name, rowsDecoded, rows };
 }
 
 function readChipIds(reader: FurBinaryReader): number[] {

@@ -4,6 +4,7 @@ import { normalizeFurData } from "../parser/fur/index.js";
 import { readFurBuffer } from "../parser/fur/index.js";
 import { BinaryWriter } from "../writer/fur/binaryWriter.js";
 import { writeFurRoundTrip } from "../writer/fur068/index.js";
+import { writeFur068FromCommon } from "../writer/fur068/convert.js";
 
 describe("Furnace 0.6.8.x parser", () => {
   it("rejects the newer INF2 header used by master-era files", () => {
@@ -35,5 +36,41 @@ describe("Furnace 0.6.8.x parser", () => {
     const roundtrip = writeFurRoundTrip({ data: normalizeFurData(compressed), compressed: true }, { compress: true });
 
     expect(normalizeFurData(roundtrip)).toEqual(normalized);
+  });
+
+  it("writes a Furnace 0.6.8.x INFO module from common data", () => {
+    const fur = writeFur068FromCommon({
+      name: "Fixture",
+      author: "Tester",
+      instruments: [{ index: 0, name: "Default", source: { name: "Default", envelopes: [], dpcmMappings: [] } }],
+      warnings: [],
+      song: {
+        name: "Song",
+        author: "Tester",
+        patternLength: 64,
+        ordersLength: 1,
+        speed: 6,
+        tempo: 150,
+        channels: [
+          {
+            source: "Square1",
+            target: "GB Square1",
+            order: [0],
+            patterns: [{ index: 0, name: "P0", rows: [{ row: 0, note: 108, instrument: 0, source: { time: 0, value: 49, flags: 0, slide: 0, effectMask: 0, effects: {} } }] }]
+          },
+          { source: "Square2", target: "GB Square2", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] },
+          { source: "Triangle", target: "GB Wave", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] },
+          { source: "Noise", target: "GB Noise", order: [0], patterns: [{ index: 0, name: "P0", rows: [] }] }
+        ]
+      }
+    });
+    const parsed = readFurBuffer(fur);
+
+    expect(parsed.header.version).toBe(232);
+    expect(parsed.info.blockId).toBe("INFO");
+    expect(parsed.info.systemName).toBe("Game Boy");
+    expect(parsed.info.instrumentCount).toBe(1);
+    expect(parsed.info.patternCount).toBe(4);
+    expect(parsed.patterns[0]?.rows[0]).toMatchObject({ row: 0, note: 108, instrument: 0 });
   });
 });
