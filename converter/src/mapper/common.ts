@@ -75,10 +75,11 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0, options: 
     if (instrument.id !== undefined) instrumentById.set(instrument.id, index);
   });
   const rowScale = options.rowScale ?? mapFamiStudioRowScale(song);
+  const patternLength = Math.min(Math.max(1, Math.ceil((song.tempo.patternLength || 64) / rowScale)), 256);
 
   const channels = song.channels
     .filter((channel) => channel.name !== "DPCM")
-    .map((channel) => mapChannel(channel, instrumentById, warnings, rowScale))
+    .map((channel) => mapChannel(channel, instrumentById, warnings, rowScale, patternLength))
     .filter((channel): channel is CommonChannel => channel !== null);
 
   if (song.channels.some((channel) => channel.name === "DPCM")) {
@@ -92,7 +93,7 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0, options: 
     song: {
       name: song.name,
       author: project.author ?? "",
-      patternLength: Math.min(Math.max(1, Math.ceil((song.tempo.patternLength || 64) / rowScale)), 256),
+      patternLength,
       ordersLength: song.length,
       speed: mapFamiStudioSpeed(song, rowScale),
       tempo: song.tempo.famitrackerTempo || 150,
@@ -127,7 +128,8 @@ function mapChannel(
   channel: FmsChannel,
   instrumentById: Map<number, number>,
   warnings: string[],
-  rowScale: number
+  rowScale: number,
+  patternLength: number
 ): CommonChannel | null {
   const target = channelMap[channel.name];
   if (!target) {
@@ -140,7 +142,7 @@ function mapChannel(
     if (pattern.id !== undefined) patternIndexById.set(pattern.id, index);
   });
 
-  return {
+  const commonChannel: CommonChannel = {
     source: channel.name,
     target,
     order: channel.order.map((patternId) => {
@@ -149,6 +151,8 @@ function mapChannel(
     }),
     patterns: channel.patterns.map((pattern, index) => mapPattern(pattern, index, instrumentById, warnings, rowScale, target))
   };
+  addCrossPatternNoteOffs(commonChannel, patternLength);
+  return commonChannel;
 }
 
 function mapPattern(
@@ -172,7 +176,6 @@ function mapPattern(
     } else if (target === "GB Noise" && row.volume !== undefined && lastNoiseNote) {
       row.note = lastNoiseNote.note;
       row.instrument = lastNoiseNote.instrument;
-      row.duration = 1;
     }
     rows.push(row);
   }
@@ -182,6 +185,34 @@ function mapPattern(
     name: pattern.name || `Pattern ${index}`,
     rows: mergeRows(rows)
   };
+}
+
+function addCrossPatternNoteOffs(channel: CommonChannel, patternLength: number): void {
+  for (let orderIndex = 0; orderIndex < channel.order.length; orderIndex++) {
+    const pattern = channel.patterns[channel.order[orderIndex] ?? 0];
+    if (!pattern) continue;
+
+    for (const row of pattern.rows) {
+      if (row.note === undefined || row.note >= 180 || row.duration === undefined) continue;
+      const absoluteEnd = orderIndex * patternLength + row.row + row.duration;
+      const targetOrderIndex = Math.floor(absoluteEnd / patternLength);
+      if (targetOrderIndex <= orderIndex || targetOrderIndex >= channel.order.length) continue;
+
+      const targetRow = absoluteEnd % patternLength;
+      const targetPattern = channel.patterns[channel.order[targetOrderIndex] ?? 0];
+      if (!targetPattern) continue;
+      if (targetPattern.rows.some((target) => target.row === targetRow && target.note !== undefined && target.note < 180)) continue;
+
+      const existingIndex = targetPattern.rows.findIndex((target) => target.row === targetRow);
+      const noteOff: CommonNote = { row: targetRow, note: 180, source: row.source };
+      if (existingIndex >= 0) {
+        targetPattern.rows[existingIndex] = mergeRow(targetPattern.rows[existingIndex], noteOff);
+      } else {
+        targetPattern.rows.push(noteOff);
+        targetPattern.rows.sort((a, b) => a.row - b.row);
+      }
+    }
+  }
 }
 
 function mapNote(

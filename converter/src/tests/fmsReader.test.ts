@@ -320,9 +320,62 @@ describe("FMS Reader", () => {
 
     expect(common.song.channels[0]?.patterns[0]?.rows.map((row) => ({ row: row.row, note: row.note, duration: row.duration, volume: row.volume }))).toEqual([
       { row: 194, note: 109, duration: 4, volume: 12 },
-      { row: 195, note: 109, duration: 1, volume: 9 },
-      { row: 196, note: 109, duration: 1, volume: 7 }
+      { row: 195, note: 109, duration: undefined, volume: 9 },
+      { row: 196, note: 109, duration: undefined, volume: 7 }
     ]);
+  });
+
+  it("carries note-off across ordered pattern boundaries", () => {
+    const common = fmsToCommonProject({
+      format: "binary-fms",
+      name: "Boundary Fixture",
+      author: "Codex",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 1, name: "Noise", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Battle",
+          length: 2,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 256,
+            beatLength: 32,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 3,
+              name: "Noise",
+              order: [0, 1],
+              patterns: [
+                {
+                  id: 0,
+                  name: "N0",
+                  channel: "Noise",
+                  notes: [{ time: 254, value: 36, flags: 0, slide: 0, instrumentId: 1, duration: 8, effectMask: 1, effects: { volume: 15 } }]
+                },
+                {
+                  id: 1,
+                  name: "N1",
+                  channel: "Noise",
+                  notes: [{ time: 6, value: 0xff, flags: 0, slide: 0, effectMask: 1, effects: { volume: 4 } }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const nextPattern = common.song.channels[0]?.patterns[1];
+
+    expect(nextPattern?.rows.find((row) => row.row === 6)).toMatchObject({ note: 180, volume: 4 });
   });
 
   it("keeps late Noise effect-only events in the FF3 battle sample when available", async () => {
@@ -331,10 +384,15 @@ describe("FMS Reader", () => {
 
     const project = await readFmsFile(samplePath);
     const common = fmsToCommonProject(project);
-    const noisePattern0 = common.song.channels.find((channel) => channel.target === "GB Noise")?.patterns[0];
+    const noiseChannel = common.song.channels.find((channel) => channel.target === "GB Noise");
+    const noisePattern0 = noiseChannel?.patterns[0];
+    const sequence08Pattern = noiseChannel?.patterns[noiseChannel.order[8] ?? 0];
+    const sequence09Pattern = noiseChannel?.patterns[noiseChannel.order[9] ?? 0];
 
     expect(noisePattern0?.rows.length).toBeGreaterThan(0);
     expect(noisePattern0?.rows.some((row) => row.row >= 194)).toBe(true);
+    expect(sequence08Pattern?.rows.find((row) => row.row === 254)).toMatchObject({ note: 107, duration: 8 });
+    expect(sequence09Pattern?.rows.find((row) => row.row === 6)).toMatchObject({ note: 180 });
   });
 
   it("writes a minimal uncompressed Furnace module", async () => {
