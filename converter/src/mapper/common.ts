@@ -35,6 +35,7 @@ export type CommonSong = {
   ordersLength: number;
   speed: number;
   tempo: number;
+  rowScale: number;
   channels: CommonChannel[];
 };
 
@@ -63,10 +64,11 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
   project.instruments.forEach((instrument, index) => {
     if (instrument.id !== undefined) instrumentById.set(instrument.id, index);
   });
+  const rowScale = mapFamiStudioRowScale(song);
 
   const channels = song.channels
     .filter((channel) => channel.name !== "DPCM")
-    .map((channel) => mapChannel(channel, instrumentById, warnings))
+    .map((channel) => mapChannel(channel, instrumentById, warnings, rowScale))
     .filter((channel): channel is CommonChannel => channel !== null);
 
   if (song.channels.some((channel) => channel.name === "DPCM")) {
@@ -80,10 +82,11 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
     song: {
       name: song.name,
       author: project.author ?? "",
-      patternLength: Math.min(song.tempo.patternLength || 64, 256),
+      patternLength: Math.min(Math.max(1, Math.ceil((song.tempo.patternLength || 64) / rowScale)), 256),
       ordersLength: song.length,
       speed: mapFamiStudioSpeed(song),
       tempo: song.tempo.famitrackerTempo || 150,
+      rowScale,
       channels
     },
     warnings
@@ -91,10 +94,12 @@ export function fmsToCommonProject(project: FmsProject, songIndex = 0): CommonPr
 }
 
 function mapFamiStudioSpeed(song: FmsSong): number {
-  const base = Math.max(1, song.tempo.groove[0] ?? song.tempo.noteLength ?? song.tempo.famitrackerSpeed ?? 6);
-  if (song.tempo.mode !== "FamiStudio" || !song.tempo.noteLength) return base;
-  const beatScale = Math.max(1, Math.round(song.tempo.beatLength / song.tempo.noteLength));
-  return Math.min(255, base * beatScale);
+  return Math.max(1, song.tempo.groove[0] ?? song.tempo.noteLength ?? song.tempo.famitrackerSpeed ?? 6);
+}
+
+function mapFamiStudioRowScale(song: FmsSong): number {
+  if (song.tempo.mode !== "FamiStudio" || !song.tempo.noteLength) return 1;
+  return Math.max(1, Math.round(song.tempo.beatLength / song.tempo.noteLength));
 }
 
 function buildInstruments(instruments: FmsInstrument[]): CommonInstrument[] {
@@ -111,7 +116,8 @@ function buildInstruments(instruments: FmsInstrument[]): CommonInstrument[] {
 function mapChannel(
   channel: FmsChannel,
   instrumentById: Map<number, number>,
-  warnings: string[]
+  warnings: string[],
+  rowScale: number
 ): CommonChannel | null {
   const target = channelMap[channel.name];
   if (!target) {
@@ -131,7 +137,7 @@ function mapChannel(
       if (patternId === null) return 0;
       return patternIndexById.get(patternId) ?? 0;
     }),
-    patterns: channel.patterns.map((pattern, index) => mapPattern(pattern, index, instrumentById, warnings))
+    patterns: channel.patterns.map((pattern, index) => mapPattern(pattern, index, instrumentById, warnings, rowScale))
   };
 }
 
@@ -139,18 +145,24 @@ function mapPattern(
   pattern: FmsPattern,
   index: number,
   instrumentById: Map<number, number>,
-  warnings: string[]
+  warnings: string[],
+  rowScale: number
 ): CommonPattern {
   return {
     index,
     name: pattern.name || `Pattern ${index}`,
     rows: pattern.notes
-      .map((note) => mapNote(note, instrumentById, warnings))
+      .map((note) => mapNote(note, instrumentById, warnings, rowScale))
       .filter((note): note is CommonNote => note !== null)
   };
 }
 
-function mapNote(note: FmsNote, instrumentById: Map<number, number>, warnings: string[]): CommonNote | null {
+function mapNote(
+  note: FmsNote,
+  instrumentById: Map<number, number>,
+  warnings: string[],
+  rowScale: number
+): CommonNote | null {
   if (note.value === 0xff) return null;
 
   let mappedNote: number;
@@ -172,8 +184,9 @@ function mapNote(note: FmsNote, instrumentById: Map<number, number>, warnings: s
     addWarning(warnings, `Effect ${effect} is parsed but not converted in this minimal .fur export.`);
   }
 
-  const duration = note.duration && note.duration > 0 ? note.duration : undefined;
-  return { row: note.time, note: mappedNote, instrument, duration, volume, source: note };
+  const row = Math.max(0, Math.round(note.time / rowScale));
+  const duration = note.duration && note.duration > 0 ? Math.max(1, Math.round(note.duration / rowScale)) : undefined;
+  return { row, note: mappedNote, instrument, duration, volume, source: note };
 }
 
 function addWarning(warnings: string[], warning: string): void {

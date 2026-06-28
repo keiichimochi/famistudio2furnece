@@ -214,6 +214,61 @@ describe("FMS Reader", () => {
     await expect(readFile(join(root, "fixtures", "boss.fms"))).resolves.toBeInstanceOf(Buffer);
   });
 
+  it("scales FamiStudio rows to Furnace tracker rows", () => {
+    const common = fmsToCommonProject({
+      format: "binary-fms",
+      name: "Scale Fixture",
+      author: "Codex",
+      pal: false,
+      expansionMask: 0,
+      instruments: [{ id: 1, name: "Lead", envelopes: [], dpcmMappings: [] }],
+      dpcmSamples: [],
+      warnings: [],
+      songs: [
+        {
+          name: "Battle",
+          length: 1,
+          loopPoint: 0,
+          tempo: {
+            mode: "FamiStudio",
+            patternLength: 256,
+            beatLength: 32,
+            noteLength: 8,
+            famitrackerTempo: 150,
+            famitrackerSpeed: 6,
+            groove: [8]
+          },
+          channels: [
+            {
+              type: 0,
+              name: "Square1",
+              order: [0],
+              patterns: [
+                {
+                  id: 0,
+                  name: "P0",
+                  channel: "Square1",
+                  notes: [
+                    { time: 0, value: 30, flags: 0, slide: 0, instrumentId: 1, duration: 4, effectMask: 0, effects: {} },
+                    { time: 4, value: 31, flags: 0, slide: 0, instrumentId: 1, duration: 4, effectMask: 0, effects: {} }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(common.song.rowScale).toBe(4);
+    expect(common.song.patternLength).toBe(64);
+    expect(common.song.speed).toBe(8);
+    expect(common.song.channels[0]?.patterns[0]?.rows.map((row) => ({ row: row.row, duration: row.duration }))).toEqual([
+      { row: 0, duration: 1 },
+      { row: 1, duration: 1 }
+    ]);
+  });
+
   it("writes a minimal uncompressed Furnace module", async () => {
     const project = await readFmsFile(join(root, "fixtures", "battle.fms"));
     const common = fmsToCommonProject(project);

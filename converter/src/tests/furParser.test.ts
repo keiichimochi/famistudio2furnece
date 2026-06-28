@@ -51,6 +51,7 @@ describe("Furnace 0.6.8.x parser", () => {
         ordersLength: 1,
         speed: 6,
         tempo: 150,
+        rowScale: 1,
         channels: [
           {
             source: "Square1",
