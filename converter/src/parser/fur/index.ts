@@ -92,6 +92,22 @@ export function formatFurDump(module: FurModuleSummary): string {
     `EOF OK : ${module.eofOk ? "yes" : "no"}`
   ];
 
+  if (module.instruments.length > 0) {
+    lines.push("Instrument List :");
+    for (const instrument of module.instruments) {
+      const name = instrument.name ? ` ${instrument.name}` : "";
+      lines.push(`- ${instrument.index}: type=${instrument.type ?? "?"}${name}`);
+    }
+  }
+
+  if (module.patterns.length > 0) {
+    lines.push("Pattern List :");
+    for (const pattern of module.patterns) {
+      const name = pattern.name ? ` ${pattern.name}` : "";
+      lines.push(`- ${pattern.index}: ch=${pattern.channel} pat=${pattern.patternIndex} rows=${pattern.rowsDecoded}${name}`);
+    }
+  }
+
   if (module.warnings.length > 0) {
     lines.push("Warnings :");
     for (const warning of module.warnings) lines.push(`- ${warning}`);
