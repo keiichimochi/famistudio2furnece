@@ -83,7 +83,7 @@ app.innerHTML = `
       </div>
       <div class="status" id="status">Ready</div>
     </header>
-    <div class="count-in" id="count-in" hidden>3</div>
+    <div class="count-in" id="count-in" hidden>4</div>
 
     <section class="transport">
       <button id="play">Play</button>
@@ -268,10 +268,10 @@ async function countIn(context: AudioContext): Promise<void> {
   countInEl.hidden = false;
   const beatSeconds = secondsPerBeat();
   const startTime = context.currentTime + 0.05;
-  for (let index = 0; index < 3; index++) {
-    scheduleClick(context, startTime + index * beatSeconds, -3 + index);
+  for (let index = 0; index < 4; index++) {
+    scheduleClick(context, startTime + index * beatSeconds, -4 + index);
   }
-  for (let value = 3; value >= 1; value--) {
+  for (let value = 4; value >= 1; value--) {
     if (!isCountingIn) break;
     countInEl.textContent = String(value);
     setStatus(`Count in: ${value}`);
