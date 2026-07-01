@@ -48,7 +48,9 @@ describe("NSF batch conversion", () => {
     expect(result.result.outputDir).toBe(join(dir, "Demo_Song"));
     await expect(stat(written.fms)).resolves.toMatchObject({ isFile: expect.any(Function) });
     await expect(stat(written.fur)).resolves.toMatchObject({ isFile: expect.any(Function) });
+    await expect(stat(written.musicxml)).resolves.toMatchObject({ isFile: expect.any(Function) });
     await expect(readFile(written.fms, "utf8")).resolves.toContain("Project ");
+    await expect(readFile(written.musicxml, "utf8")).resolves.toContain("<score-partwise");
     expect(readFurBuffer(await readFile(written.fur)).info.systemName).toBe("Game Boy");
   });
 });

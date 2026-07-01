@@ -9,6 +9,7 @@ import { readFmsFile } from "./parser/fms/index.js";
 import { readFuwFile } from "./parser/fur/wavetable.js";
 import { readNsfBuffer, readNsfFile, type NsfDocument, type NsfTrack } from "./parser/nsf/index.js";
 import { writeFur068FromCommon } from "./writer/fur068/convert.js";
+import { writeMusicXmlFromCommon } from "./writer/musicxml/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,7 +21,7 @@ export type ConvertedFurFile = {
 
 export type WrittenNsfConversion = {
   outputDir: string;
-  files: Array<{ fms: string; fur: string; warnings: string[] }>;
+  files: Array<{ fms: string; fur: string; musicxml: string; warnings: string[] }>;
 };
 
 export type NsfConversionOptions = {
@@ -93,6 +94,7 @@ export async function writeNsfProjectFiles(
     const trackName = `${String(track.index + 1).padStart(2, "0")}-${sanitizeFileName(track.name)}`;
     const textPath = join(outputDir, `${trackName}.fms.txt`);
     const furPath = join(outputDir, `${trackName}.fur`);
+    const musicXmlPath = join(outputDir, `${trackName}.musicxml`);
     await importNsfTrackWithFamiStudio(inputPath, textPath, track, options);
     const project = await readFmsFile(textPath);
     const common = optimizeCommonProject(fmsToCommonProject(project, 0));
@@ -102,7 +104,8 @@ export async function writeNsfProjectFiles(
     common.song.author = document.header.artist || common.song.author;
     common.wavetables = wavetables.map((wavetable, index) => ({ name: `Triangle ${index + 1}`, block: wavetable.block }));
     await writeFile(furPath, writeFur068FromCommon(common));
-    files.push({ fms: textPath, fur: furPath, warnings: common.warnings });
+    await writeFile(musicXmlPath, writeMusicXmlFromCommon(common), "utf8");
+    files.push({ fms: textPath, fur: furPath, musicxml: musicXmlPath, warnings: common.warnings });
   }
 
   return { outputDir, files };

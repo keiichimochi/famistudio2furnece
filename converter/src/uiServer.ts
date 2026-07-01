@@ -155,6 +155,7 @@ function contentType(path: string): string {
   if (extname(path) === ".mp3") return "audio/mpeg";
   if (extname(path) === ".wav") return "audio/wav";
   if (extname(path) === ".fur") return "application/octet-stream";
+  if (extname(path) === ".musicxml") return "application/vnd.recordare.musicxml+xml; charset=utf-8";
   return "application/octet-stream";
 }
 
@@ -207,7 +208,7 @@ const INDEX_HTML = String.raw`<!doctype html>
       <tbody></tbody>
     </table>
     <table id="files" hidden>
-      <thead><tr><th>#</th><th>FUR</th><th>MP3確認</th></tr></thead>
+      <thead><tr><th>#</th><th>FUR</th><th>MusicXML</th><th>MP3確認</th></tr></thead>
       <tbody></tbody>
     </table>
     <div id="status" class="status"></div>
@@ -316,6 +317,7 @@ const INDEX_HTML = String.raw`<!doctype html>
       filesBody.innerHTML = files.map((file, index) =>
         "<tr><td>" + String(index + 1).padStart(2, "0") + "</td>" +
         "<td class=\"path\"><code>" + escapeHtml(file.fur) + "</code></td>" +
+        "<td class=\"path\"><a href=\"/api/file?path=" + encodeURIComponent(file.musicxml) + "\" target=\"_blank\"><code>" + escapeHtml(file.musicxml) + "</code></a></td>" +
         "<td class=\"audio-cell\"><button class=\"secondary\" data-index=\"" + index + "\">MP3</button><div data-audio class=\"muted\"></div></td></tr>"
       ).join("");
       filesTable.hidden = false;

@@ -9,6 +9,7 @@ import { inspectProject, readFmsFile } from "./parser/fms/index.js";
 import { formatNsfTrackList, readNsfFile } from "./parser/nsf/index.js";
 import { startUiServer } from "./uiServer.js";
 import { writeFur068FromCommon } from "./writer/fur068/convert.js";
+import { writeMusicXmlFromCommon } from "./writer/musicxml/index.js";
 
 const program = new Command();
 
@@ -41,6 +42,23 @@ program
   });
 
 program
+  .command("musicxml")
+  .argument("<file>", "FamiStudio .fms project or FamiStudio Text export")
+  .option("-o, --out <file>", "output MusicXML file")
+  .description("Convert a FamiStudio song to a MusicXML score")
+  .action(async (file: string, options: { out?: string }) => {
+    const fms = await readFmsFile(file);
+    const common = optimizeCommonProject(fmsToCommonProject(fms, 0));
+    const parsed = parse(file);
+    const output = options.out ?? join(dirname(file), `${parsed.name}.musicxml`);
+    await writeFile(output, writeMusicXmlFromCommon(common), "utf8");
+    process.stdout.write(`Wrote ${output}\n`);
+    if (common.warnings.length > 0) {
+      process.stderr.write(`Warnings:\n${common.warnings.map((warning) => `- ${warning}`).join("\n")}\n`);
+    }
+  });
+
+program
   .command("nsf-inspect")
   .argument("<file>", "NES Sound Format .nsf file")
   .description("Read an NSF header and list contained songs")
@@ -66,7 +84,7 @@ program
       patternLength: options.patternLength
     });
     process.stdout.write(`Output directory: ${result.outputDir}\n`);
-    for (const output of result.files) process.stdout.write(`Wrote ${output.fms}\nWrote ${output.fur}\n`);
+    for (const output of result.files) process.stdout.write(`Wrote ${output.fms}\nWrote ${output.fur}\nWrote ${output.musicxml}\n`);
     const warnings = new Set(result.files.flatMap((output) => output.warnings));
     if (warnings.size > 0) process.stderr.write(`Warnings:\n${[...warnings].map((warning) => `- ${warning}`).join("\n")}\n`);
   });
