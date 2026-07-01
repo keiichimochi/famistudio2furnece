@@ -6,6 +6,7 @@ Browser-based Game Boy sketch composer for iPhone microphone input.
 
 - Four GB-style channels: Square 1, Square 2, Wave, Noise
 - Record the selected channel while other channels play as guide
+- Metronome click on every beat while recording
 - Hum or whistle pitched channels; the browser converts pitch to quantized MIDI note events
 - Tap/beatbox the Noise channel; amplitude peaks become noise hits
 - Play back with Web Audio GB-style synthesis

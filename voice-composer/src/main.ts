@@ -192,7 +192,7 @@ async function toggleRecording(): Promise<void> {
     }
   });
   eraseActiveChannel(false);
-  await playProject();
+  await playProject({ metronome: true });
 
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
@@ -202,7 +202,7 @@ async function toggleRecording(): Promise<void> {
     stream,
     source,
     analyser,
-    startedAt: context.currentTime,
+    startedAt: playbackStartedAt,
     samples: new Float32Array(analyser.fftSize) as Float32Array<ArrayBuffer>,
     events: [],
     lastNoiseBeat: -999,
@@ -310,12 +310,13 @@ function finalizeOpenNote(current: RecordingState, endBeat: number): void {
   render();
 }
 
-async function playProject(): Promise<void> {
+async function playProject(options: { metronome?: boolean } = {}): Promise<void> {
   const context = await ensureAudio();
   stopPlayback(false);
   isPlaying = true;
   playbackStartedAt = context.currentTime;
   schedulePlayback(context, playbackStartedAt, state.notes);
+  if (options.metronome) scheduleMetronome(context, playbackStartedAt);
   animatePlayhead();
   setStatus("Playing");
 }
@@ -336,6 +337,24 @@ function schedulePlayback(context: AudioContext, startTime: number, notes: NoteE
     const duration = Math.max(0.04, note.duration * secondsPerBeat);
     if (channel.kind === "noise") scheduleNoise(context, startsAt, duration, note.velocity);
     else scheduleTone(context, channel, startsAt, duration, midiToFrequency(note.midi), note.velocity);
+  }
+}
+
+function scheduleMetronome(context: AudioContext, startTime: number): void {
+  const secondsPerBeat = 60 / state.bpm;
+  for (let beat = 0; beat <= state.lengthBeats; beat++) {
+    const startsAt = startTime + beat * secondsPerBeat;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(beat % 4 === 0 ? 1400 : 950, startsAt);
+    gain.gain.setValueAtTime(0, startsAt);
+    gain.gain.linearRampToValueAtTime(0.16, startsAt + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + 0.045);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startsAt);
+    oscillator.stop(startsAt + 0.055);
   }
 }
 
