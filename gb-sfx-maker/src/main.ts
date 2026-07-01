@@ -8,6 +8,8 @@ type SfxPreset = {
   category: string;
   description: string;
   durationMs: number;
+  repeatCount: number;
+  repeatIntervalMs: number;
   startNote: number;
   endNote: number;
   volumeStart: number;
@@ -38,6 +40,8 @@ const starterPresets: SfxPreset[] = [
     category: "Attack",
     description: "Short rising scrape for a fast sword cut.",
     durationMs: 180,
+    repeatCount: 1,
+    repeatIntervalMs: 48,
     startNote: 72,
     endNote: 92,
     volumeStart: 0.9,
@@ -50,11 +54,32 @@ const starterPresets: SfxPreset[] = [
     wave: waves.blade,
   },
   {
+    id: "slash-23-hit",
+    name: "23 Hit Sword Rush",
+    category: "Attack",
+    description: "Rapid repeated blade hits for a FF-style multi-hit attack.",
+    durationMs: 78,
+    repeatCount: 23,
+    repeatIntervalMs: 42,
+    startNote: 70,
+    endNote: 91,
+    volumeStart: 0.95,
+    volumeEnd: 0,
+    bend: "expo",
+    vibratoDepth: 0.2,
+    vibratoRate: 21,
+    retriggerHz: 33,
+    noiseMix: 0.2,
+    wave: waves.blade,
+  },
+  {
     id: "slash-heavy",
     name: "Heavy Slash",
     category: "Attack",
     description: "Lower double-edged blade hit.",
     durationMs: 260,
+    repeatCount: 1,
+    repeatIntervalMs: 64,
     startNote: 58,
     endNote: 82,
     volumeStart: 1,
@@ -72,6 +97,8 @@ const starterPresets: SfxPreset[] = [
     category: "Damage",
     description: "Quick pain chirp for light damage.",
     durationMs: 150,
+    repeatCount: 1,
+    repeatIntervalMs: 48,
     startNote: 83,
     endNote: 67,
     volumeStart: 0.95,
@@ -89,6 +116,8 @@ const starterPresets: SfxPreset[] = [
     category: "Damage",
     description: "Dropping impact for a strong hit.",
     durationMs: 320,
+    repeatCount: 1,
+    repeatIntervalMs: 70,
     startNote: 74,
     endNote: 38,
     volumeStart: 1,
@@ -106,6 +135,8 @@ const starterPresets: SfxPreset[] = [
     category: "Enemy",
     description: "Long falling growl when an enemy disappears.",
     durationMs: 720,
+    repeatCount: 1,
+    repeatIntervalMs: 90,
     startNote: 63,
     endNote: 24,
     volumeStart: 1,
@@ -123,6 +154,8 @@ const starterPresets: SfxPreset[] = [
     category: "Magic",
     description: "Rising flame ignition with rough overtones.",
     durationMs: 420,
+    repeatCount: 1,
+    repeatIntervalMs: 60,
     startNote: 48,
     endNote: 84,
     volumeStart: 0.2,
@@ -140,6 +173,8 @@ const starterPresets: SfxPreset[] = [
     category: "Magic",
     description: "Bright burst after a fire spell lands.",
     durationMs: 500,
+    repeatCount: 1,
+    repeatIntervalMs: 60,
     startNote: 86,
     endNote: 45,
     volumeStart: 1,
@@ -157,6 +192,8 @@ const starterPresets: SfxPreset[] = [
     category: "UI",
     description: "Compact selectable menu tone.",
     durationMs: 90,
+    repeatCount: 1,
+    repeatIntervalMs: 48,
     startNote: 84,
     endNote: 91,
     volumeStart: 0.55,
@@ -174,6 +211,8 @@ const starterPresets: SfxPreset[] = [
     category: "Reward",
     description: "Small rising sparkle for item or gil.",
     durationMs: 360,
+    repeatCount: 1,
+    repeatIntervalMs: 70,
     startNote: 72,
     endNote: 103,
     volumeStart: 0.35,
@@ -191,6 +230,8 @@ const starterPresets: SfxPreset[] = [
     category: "Magic",
     description: "Soft upward pulse for recovery magic.",
     durationMs: 580,
+    repeatCount: 1,
+    repeatIntervalMs: 120,
     startNote: 60,
     endNote: 91,
     volumeStart: 0.25,
@@ -253,6 +294,10 @@ app.innerHTML = `
       <div class="controls">
         <label>Duration <input id="duration" type="range" min="40" max="1400" step="10" /></label>
         <output id="duration-out"></output>
+        <label>Repeat Count <input id="repeat-count" type="range" min="1" max="32" step="1" /></label>
+        <output id="repeat-count-out"></output>
+        <label>Repeat Gap <input id="repeat-interval" type="range" min="16" max="180" step="2" /></label>
+        <output id="repeat-interval-out"></output>
         <label>Start Note <input id="start-note" type="range" min="24" max="108" step="1" /></label>
         <output id="start-note-out"></output>
         <label>End Note <input id="end-note" type="range" min="24" max="108" step="1" /></label>
@@ -306,6 +351,8 @@ const statusEl = byId<HTMLDivElement>("status");
 const fileInput = byId<HTMLInputElement>("file-input");
 const controls = {
   durationMs: [byId<HTMLInputElement>("duration"), byId<HTMLOutputElement>("duration-out")] as const,
+  repeatCount: [byId<HTMLInputElement>("repeat-count"), byId<HTMLOutputElement>("repeat-count-out")] as const,
+  repeatIntervalMs: [byId<HTMLInputElement>("repeat-interval"), byId<HTMLOutputElement>("repeat-interval-out")] as const,
   startNote: [byId<HTMLInputElement>("start-note"), byId<HTMLOutputElement>("start-note-out")] as const,
   endNote: [byId<HTMLInputElement>("end-note"), byId<HTMLOutputElement>("end-note-out")] as const,
   volumeStart: [byId<HTMLInputElement>("volume-start"), byId<HTMLOutputElement>("volume-start-out")] as const,
@@ -339,6 +386,8 @@ function bindEvents(): void {
 
   const numericBindings: Array<[keyof SfxPreset, HTMLInputElement]> = [
     ["durationMs", controls.durationMs[0]],
+    ["repeatCount", controls.repeatCount[0]],
+    ["repeatIntervalMs", controls.repeatIntervalMs[0]],
     ["startNote", controls.startNote[0]],
     ["endNote", controls.endNote[0]],
     ["volumeStart", controls.volumeStart[0]],
@@ -406,6 +455,8 @@ function renderFields(): void {
 
 function renderControls(): void {
   setControl("durationMs", current.durationMs, `${current.durationMs} ms`);
+  setControl("repeatCount", current.repeatCount, `${current.repeatCount} hits`);
+  setControl("repeatIntervalMs", current.repeatIntervalMs, `${current.repeatIntervalMs} ms`);
   setControl("startNote", current.startNote, noteName(current.startNote));
   setControl("endNote", current.endNote, noteName(current.endNote));
   setControl("volumeStart", current.volumeStart, current.volumeStart.toFixed(2));
@@ -447,6 +498,9 @@ function renderSummary(): void {
       name: current.name,
       category: current.category,
       durationMs: current.durationMs,
+      totalDurationMs: getTotalDurationMs(current),
+      repeatCount: current.repeatCount,
+      repeatIntervalMs: current.repeatIntervalMs,
       pitch: `${noteName(current.startNote)} -> ${noteName(current.endNote)}`,
       bend: current.bend,
       vibrato: `${current.vibratoDepth} st @ ${current.vibratoRate} Hz`,
@@ -517,7 +571,7 @@ function stopPlayback(): void {
 }
 
 function renderBuffer(preset: SfxPreset, rate: number): AudioBuffer {
-  const context = new OfflineAudioContext(1, Math.ceil((preset.durationMs / 1000) * rate), rate);
+  const context = new OfflineAudioContext(1, Math.ceil((getTotalDurationMs(preset) / 1000) * rate), rate);
   const data = renderSamples(preset, rate);
   const buffer = context.createBuffer(1, data.length, rate);
   buffer.copyToChannel(data, 0);
@@ -525,6 +579,26 @@ function renderBuffer(preset: SfxPreset, rate: number): AudioBuffer {
 }
 
 function renderSamples(preset: SfxPreset, rate: number): Float32Array<ArrayBuffer> {
+  const hit = renderHitSamples(preset, rate);
+  const repeatCount = Math.max(1, Math.round(preset.repeatCount));
+  const intervalSamples = Math.max(1, Math.round((preset.repeatIntervalMs / 1000) * rate));
+  const total = hit.length + intervalSamples * (repeatCount - 1);
+  const output = new Float32Array(total);
+  for (let repeat = 0; repeat < repeatCount; repeat++) {
+    const offset = repeat * intervalSamples;
+    const accent = repeat % 4 === 0 ? 1 : 0.78 + (repeat % 3) * 0.07;
+    for (let i = 0; i < hit.length; i++) {
+      output[offset + i] += hit[i] * accent;
+    }
+  }
+  for (let i = 0; i < output.length; i++) {
+    output[i] = clampFloat(output[i]);
+  }
+  fadeEdges(output, rate);
+  return output;
+}
+
+function renderHitSamples(preset: SfxPreset, rate: number): Float32Array<ArrayBuffer> {
   const total = Math.max(1, Math.ceil((preset.durationMs / 1000) * rate));
   const output = new Float32Array(total);
   let phase = 0;
@@ -582,6 +656,8 @@ function mutateCurrent(): void {
     id: `custom-${Date.now()}`,
     name: `${current.name} Variant`,
     durationMs: clamp(current.durationMs + randomInt(-80, 100), 40, 1400),
+    repeatCount: clamp(current.repeatCount + randomInt(-2, 3), 1, 32),
+    repeatIntervalMs: clamp(current.repeatIntervalMs + randomInt(-12, 12), 16, 180),
     startNote: clamp(current.startNote + randomInt(-7, 7), 24, 108),
     endNote: clamp(current.endNote + randomInt(-10, 10), 24, 108),
     vibratoDepth: clampFloat(current.vibratoDepth + (Math.random() - 0.5) * 0.6),
@@ -688,6 +764,8 @@ function sanitizePreset(input: SfxPreset): SfxPreset {
     category: input.category || "Custom",
     description: input.description || "",
     durationMs: clamp(Math.round(input.durationMs || fallback.durationMs), 40, 1400),
+    repeatCount: clamp(Math.round(input.repeatCount || 1), 1, 32),
+    repeatIntervalMs: clamp(Math.round(input.repeatIntervalMs || fallback.repeatIntervalMs), 16, 180),
     startNote: clamp(Math.round(input.startNote || fallback.startNote), 24, 108),
     endNote: clamp(Math.round(input.endNote || fallback.endNote), 24, 108),
     volumeStart: clampFloat(Number(input.volumeStart ?? fallback.volumeStart)),
@@ -727,6 +805,10 @@ function noteName(midi: number): string {
 
 function midiToHz(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
+}
+
+function getTotalDurationMs(preset: SfxPreset): number {
+  return preset.durationMs + Math.max(0, preset.repeatCount - 1) * preset.repeatIntervalMs;
 }
 
 function clamp(value: number, min: number, max: number): number {
