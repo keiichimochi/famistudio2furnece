@@ -66,6 +66,23 @@ select {
   grid-template-rows: auto auto 1fr;
 }
 
+.count-in {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 9, 13, 0.58);
+  color: #ffffff;
+  font-size: 96px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.count-in[hidden] {
+  display: none;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -247,6 +264,8 @@ select {
     linear-gradient(#1a2530 1px, transparent 1px) 0 0 / 100% 24px,
     linear-gradient(90deg, #263442 1px, transparent 1px) 0 0 / 48px 100%,
     #0b1016;
+  touch-action: manipulation;
+  cursor: crosshair;
 }
 
 .roll-inner {
@@ -280,6 +299,28 @@ select {
   background: #ffffff;
   opacity: 0.82;
   pointer-events: none;
+}
+
+.start-marker {
+  position: absolute;
+  left: calc(var(--time) * 48px);
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #ffdf5f;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.start-marker::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  background: #ffdf5f;
+  transform: rotate(45deg) translateY(-5px);
 }
 
 .export-area {

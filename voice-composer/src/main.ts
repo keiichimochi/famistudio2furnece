@@ -26,6 +26,7 @@ type ProjectState = {
   bpm: number;
   quantize: number;
   lengthBeats: number;
+  recordStartBeat: number;
   activeChannel: ChannelId;
   notes: NoteEvent[];
 };
@@ -55,15 +56,20 @@ const state: ProjectState = {
   bpm: 120,
   quantize: 0.25,
   lengthBeats: 16,
+  recordStartBeat: 0,
   activeChannel: "sq1",
   notes: []
 };
 
 let audioContext: AudioContext | undefined;
 let recording: RecordingState | undefined;
+let isCountingIn = false;
 let isPlaying = false;
 let playbackStartedAt = 0;
+let playbackStartBeat = 0;
 let playheadTimer = 0;
+let countInTimer = 0;
+let countInResolve: (() => void) | undefined;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app root.");
@@ -77,6 +83,7 @@ app.innerHTML = `
       </div>
       <div class="status" id="status">Ready</div>
     </header>
+    <div class="count-in" id="count-in" hidden>3</div>
 
     <section class="transport">
       <button id="play">Play</button>
@@ -108,7 +115,7 @@ app.innerHTML = `
         <div class="record-panel">
           <div class="record-title">
             <strong id="active-title">GB Square 1</strong>
-            <span class="muted" id="record-hint">Record replaces only the selected channel. Other channels play as guide.</span>
+            <span class="muted" id="record-hint">Tap the roll to choose a start beat. Recording replaces the selected channel from that beat onward.</span>
           </div>
           <div class="record-actions">
             <button id="record">Record Channel</button>
@@ -116,7 +123,7 @@ app.innerHTML = `
           </div>
         </div>
         <div class="meters" id="meters"></div>
-        <div class="piano-roll" id="roll"><div class="roll-inner" id="roll-inner"><div class="playhead" id="playhead" style="--time: 0"></div></div></div>
+        <div class="piano-roll" id="roll"><div class="roll-inner" id="roll-inner"><div class="start-marker" id="start-marker" style="--time: 0"></div><div class="playhead" id="playhead" style="--time: 0"></div></div></div>
         <textarea class="export-area" id="json" spellcheck="false" placeholder="Export JSON appears here"></textarea>
       </section>
     </section>
@@ -126,8 +133,11 @@ app.innerHTML = `
 const statusEl = mustGet<HTMLElement>("status");
 const channelsEl = mustGet<HTMLElement>("channels");
 const metersEl = mustGet<HTMLElement>("meters");
+const rollEl = mustGet<HTMLElement>("roll");
 const rollInnerEl = mustGet<HTMLElement>("roll-inner");
+let startMarkerEl = mustGet<HTMLElement>("start-marker");
 let playheadEl = mustGet<HTMLElement>("playhead");
+const countInEl = mustGet<HTMLElement>("count-in");
 const jsonEl = mustGet<HTMLTextAreaElement>("json");
 const activeTitleEl = mustGet<HTMLElement>("active-title");
 const playButton = mustGet<HTMLButtonElement>("play");
@@ -160,6 +170,15 @@ quantizeInput.addEventListener("change", () => {
 });
 lengthInput.addEventListener("change", () => {
   state.lengthBeats = clamp(Number.parseInt(lengthInput.value, 10), 4, 128);
+  state.recordStartBeat = clamp(state.recordStartBeat, 0, state.lengthBeats - state.quantize);
+  render();
+});
+rollEl.addEventListener("pointerdown", (event) => {
+  if (recording || isCountingIn) return;
+  const rect = rollInnerEl.getBoundingClientRect();
+  const rawBeat = (event.clientX - rect.left) / 48;
+  state.recordStartBeat = clamp(Math.round(rawBeat), 0, Math.max(0, state.lengthBeats - state.quantize));
+  setStatus(`Record start: beat ${state.recordStartBeat + 1}`);
   render();
 });
 
@@ -182,6 +201,10 @@ async function toggleRecording(): Promise<void> {
     stopRecording(true);
     return;
   }
+  if (isCountingIn) {
+    cancelCountIn();
+    return;
+  }
 
   const context = await ensureAudio();
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -191,8 +214,14 @@ async function toggleRecording(): Promise<void> {
       autoGainControl: false
     }
   });
-  eraseActiveChannel(false);
-  await playProject({ metronome: true });
+  eraseActiveChannelFrom(state.recordStartBeat);
+  await countIn(context);
+  if (!isCountingIn) {
+    stopStream(stream);
+    return;
+  }
+  isCountingIn = false;
+  await playProject({ metronome: true, startBeat: state.recordStartBeat });
 
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
@@ -202,7 +231,7 @@ async function toggleRecording(): Promise<void> {
     stream,
     source,
     analyser,
-    startedAt: playbackStartedAt,
+    startedAt: playbackStartedAt - state.recordStartBeat * secondsPerBeat(),
     samples: new Float32Array(analyser.fftSize) as Float32Array<ArrayBuffer>,
     events: [],
     lastNoiseBeat: -999,
@@ -220,7 +249,7 @@ function stopRecording(commit: boolean): void {
   cancelAnimationFrame(current.raf);
   finalizeOpenNote(current, beatNow(current.startedAt));
   current.source.disconnect();
-  for (const track of current.stream.getTracks()) track.stop();
+  stopStream(current.stream);
   if (commit) {
     state.notes.push(...mergeAdjacent(current.events).filter((event) => event.duration > 0));
     setStatus(`Recorded ${current.events.length} event(s) to ${activeChannel().shortName}`);
@@ -230,6 +259,51 @@ function stopRecording(commit: boolean): void {
   recordButton.classList.remove("danger");
   stopPlayback();
   render();
+}
+
+async function countIn(context: AudioContext): Promise<void> {
+  isCountingIn = true;
+  recordButton.textContent = "Cancel";
+  recordButton.classList.add("danger");
+  countInEl.hidden = false;
+  const beatSeconds = secondsPerBeat();
+  const startTime = context.currentTime + 0.05;
+  for (let index = 0; index < 3; index++) {
+    scheduleClick(context, startTime + index * beatSeconds, -3 + index);
+  }
+  for (let value = 3; value >= 1; value--) {
+    if (!isCountingIn) break;
+    countInEl.textContent = String(value);
+    setStatus(`Count in: ${value}`);
+    await wait(beatSeconds * 1000);
+  }
+  countInEl.hidden = true;
+  if (isCountingIn) setStatus(`Recording from beat ${state.recordStartBeat + 1}`);
+}
+
+function cancelCountIn(): void {
+  isCountingIn = false;
+  window.clearTimeout(countInTimer);
+  countInResolve?.();
+  countInResolve = undefined;
+  countInEl.hidden = true;
+  recordButton.textContent = "Record Channel";
+  recordButton.classList.remove("danger");
+  setStatus("Count in cancelled");
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    countInResolve = resolve;
+    countInTimer = window.setTimeout(() => {
+      countInResolve = undefined;
+      resolve();
+    }, ms);
+  });
+}
+
+function stopStream(stream: MediaStream): void {
+  for (const track of stream.getTracks()) track.stop();
 }
 
 function recordLoop(): void {
@@ -310,13 +384,14 @@ function finalizeOpenNote(current: RecordingState, endBeat: number): void {
   render();
 }
 
-async function playProject(options: { metronome?: boolean } = {}): Promise<void> {
+async function playProject(options: { metronome?: boolean; startBeat?: number } = {}): Promise<void> {
   const context = await ensureAudio();
   stopPlayback(false);
   isPlaying = true;
   playbackStartedAt = context.currentTime;
-  schedulePlayback(context, playbackStartedAt, state.notes);
-  if (options.metronome) scheduleMetronome(context, playbackStartedAt);
+  playbackStartBeat = options.startBeat ?? 0;
+  schedulePlayback(context, playbackStartedAt, state.notes, playbackStartBeat);
+  if (options.metronome) scheduleMetronome(context, playbackStartedAt, playbackStartBeat);
   animatePlayhead();
   setStatus("Playing");
 }
@@ -324,38 +399,44 @@ async function playProject(options: { metronome?: boolean } = {}): Promise<void>
 function stopPlayback(updateStatus = true): void {
   isPlaying = false;
   window.clearTimeout(playheadTimer);
-  playheadEl.style.setProperty("--time", "0");
+  playheadEl.style.setProperty("--time", String(state.recordStartBeat));
   if (updateStatus) setStatus("Stopped");
 }
 
-function schedulePlayback(context: AudioContext, startTime: number, notes: NoteEvent[]): void {
-  const secondsPerBeat = 60 / state.bpm;
+function schedulePlayback(context: AudioContext, startTime: number, notes: NoteEvent[], startBeat: number): void {
+  const beatSeconds = secondsPerBeat();
   for (const note of notes) {
     const channel = channels.find((item) => item.id === note.channel);
     if (!channel) continue;
-    const startsAt = startTime + note.start * secondsPerBeat;
-    const duration = Math.max(0.04, note.duration * secondsPerBeat);
+    if (note.start + note.duration <= startBeat) continue;
+    const clippedStart = Math.max(note.start, startBeat);
+    const startsAt = startTime + (clippedStart - startBeat) * beatSeconds;
+    const duration = Math.max(0.04, (note.start + note.duration - clippedStart) * beatSeconds);
     if (channel.kind === "noise") scheduleNoise(context, startsAt, duration, note.velocity);
     else scheduleTone(context, channel, startsAt, duration, midiToFrequency(note.midi), note.velocity);
   }
 }
 
-function scheduleMetronome(context: AudioContext, startTime: number): void {
-  const secondsPerBeat = 60 / state.bpm;
-  for (let beat = 0; beat <= state.lengthBeats; beat++) {
-    const startsAt = startTime + beat * secondsPerBeat;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "square";
-    oscillator.frequency.setValueAtTime(beat % 4 === 0 ? 1400 : 950, startsAt);
-    gain.gain.setValueAtTime(0, startsAt);
-    gain.gain.linearRampToValueAtTime(0.16, startsAt + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + 0.045);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(startsAt);
-    oscillator.stop(startsAt + 0.055);
+function scheduleMetronome(context: AudioContext, startTime: number, startBeat: number): void {
+  const beatSeconds = secondsPerBeat();
+  for (let beat = Math.floor(startBeat); beat <= state.lengthBeats; beat++) {
+    if (beat < startBeat) continue;
+    scheduleClick(context, startTime + (beat - startBeat) * beatSeconds, beat);
   }
+}
+
+function scheduleClick(context: AudioContext, startsAt: number, beat: number): void {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "square";
+  oscillator.frequency.setValueAtTime(beat % 4 === 0 ? 1400 : 950, startsAt);
+  gain.gain.setValueAtTime(0, startsAt);
+  gain.gain.linearRampToValueAtTime(0.16, startsAt + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.001, startsAt + 0.045);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(startsAt);
+  oscillator.stop(startsAt + 0.055);
 }
 
 function scheduleTone(context: AudioContext, channel: Channel, startsAt: number, duration: number, frequency: number, velocity: number): void {
@@ -390,7 +471,7 @@ function scheduleNoise(context: AudioContext, startsAt: number, duration: number
 
 function animatePlayhead(): void {
   if (!audioContext || !isPlaying) return;
-  const beat = (audioContext.currentTime - playbackStartedAt) / (60 / state.bpm);
+  const beat = playbackStartBeat + (audioContext.currentTime - playbackStartedAt) / secondsPerBeat();
   playheadEl.style.setProperty("--time", String(Math.min(beat, state.lengthBeats)));
   if (beat >= state.lengthBeats) {
     stopPlayback(false);
@@ -406,6 +487,16 @@ function eraseActiveChannel(renderAfter = true): void {
     setStatus(`Erased ${activeChannel().shortName}`);
     render();
   }
+}
+
+function eraseActiveChannelFrom(startBeat: number): void {
+  state.notes = state.notes.flatMap((note) => {
+    if (note.channel !== state.activeChannel) return [note];
+    if (note.start >= startBeat) return [];
+    if (note.start + note.duration <= startBeat) return [note];
+    const duration = startBeat - note.start;
+    return duration > 0 ? [{ ...note, duration }] : [];
+  });
 }
 
 function clearAll(): void {
@@ -483,7 +574,12 @@ function render(): void {
     .join("");
 
   rollInnerEl.style.width = `${Math.max(960, state.lengthBeats * 48)}px`;
-  rollInnerEl.innerHTML = `<div class="playhead" id="playhead" style="--time: 0"></div>${state.notes.map(renderNote).join("")}`;
+  rollInnerEl.innerHTML = `<div class="start-marker" id="start-marker" style="--time: ${state.recordStartBeat}"></div><div class="playhead" id="playhead" style="--time: ${state.recordStartBeat}"></div>${state.notes.map(renderNote).join("")}`;
+  const updatedStartMarker = document.getElementById("start-marker");
+  if (updatedStartMarker) {
+    startMarkerEl.replaceWith(updatedStartMarker);
+    startMarkerEl = updatedStartMarker;
+  }
   const updatedPlayhead = document.getElementById("playhead");
   if (updatedPlayhead) {
     playheadEl.replaceWith(updatedPlayhead);
@@ -507,6 +603,10 @@ function beatNow(startedAt: number): number {
 
 function quantizeBeat(beat: number): number {
   return clamp(Math.round(beat / state.quantize) * state.quantize, 0, state.lengthBeats);
+}
+
+function secondsPerBeat(): number {
+  return 60 / state.bpm;
 }
 
 function mergeAdjacent(events: NoteEvent[]): NoteEvent[] {
